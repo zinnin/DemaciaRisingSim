@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/DemaciaRisingSim.Core/DemaciaRisingSim.Core.csproj" />
+    <Project Path="src/DemaciaRisingSim.UI/DemaciaRisingSim.UI.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/DemaciaRisingSim.Core.Tests/DemaciaRisingSim.Core.Tests.csproj" />
+  </Folder>
+</Solution>
