@@ -1,0 +1,98 @@
+﻿<Window x:Class="DemaciaRisingSim.UI.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:DemaciaRisingSim.UI"
+        mc:Ignorable="d"
+        Title="Demacia Rising Simulator" Height="650" Width="960"
+        Background="#1a1a2e">
+
+    <Window.Resources>
+        <Style TargetType="Button">
+            <Setter Property="Background" Value="#16213e"/>
+            <Setter Property="Foreground" Value="#e2e2e2"/>
+            <Setter Property="BorderBrush" Value="#0f3460"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Cursor" Value="Hand"/>
+        </Style>
+        <Style TargetType="TextBlock">
+            <Setter Property="Foreground" Value="#e2e2e2"/>
+        </Style>
+        <Style TargetType="DataGrid">
+            <Setter Property="Background" Value="#16213e"/>
+            <Setter Property="Foreground" Value="#e2e2e2"/>
+            <Setter Property="BorderBrush" Value="#0f3460"/>
+            <Setter Property="GridLinesVisibility" Value="Horizontal"/>
+            <Setter Property="HorizontalGridLinesBrush" Value="#0f3460"/>
+            <Setter Property="RowBackground" Value="#16213e"/>
+            <Setter Property="AlternatingRowBackground" Value="#1a2a4a"/>
+        </Style>
+        <Style TargetType="DataGridColumnHeader">
+            <Setter Property="Background" Value="#0f3460"/>
+            <Setter Property="Foreground" Value="#e2d6a0"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="6,4"/>
+        </Style>
+        <Style TargetType="DataGridCell">
+            <Setter Property="BorderBrush" Value="Transparent"/>
+        </Style>
+    </Window.Resources>
+
+    <DockPanel Margin="12">
+
+        <!-- Title bar -->
+        <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
+            <TextBlock Text="Demacia Rising — Board Simulator" FontSize="22" FontWeight="Bold"
+                       Foreground="#e2d6a0"/>
+            <TextBlock Text="Visualize city layouts and optimize tile assignments for maximum production score"
+                       Foreground="#aaaacc" FontSize="12" Margin="0,2,0,0"/>
+        </StackPanel>
+
+        <!-- Toolbar -->
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
+            <Button Content="Load Default Board" Click="LoadDefault_Click" Margin="0,0,8,0"/>
+            <Button Content="Optimize Board" Click="Optimize_Click" Margin="0,0,8,0"/>
+            <TextBlock x:Name="StatusText" Text="{Binding StatusMessage}"
+                       Foreground="#aaaacc" VerticalAlignment="Center" FontSize="12"/>
+        </StackPanel>
+
+        <!-- Summary totals -->
+        <Border DockPanel.Dock="Top" Background="#16213e" BorderBrush="#0f3460"
+                BorderThickness="1" CornerRadius="4" Padding="10,8" Margin="0,0,0,10">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Total Production — " FontWeight="SemiBold" Foreground="#e2d6a0"/>
+                <TextBlock Text="Lumber: " Foreground="#88cc88"/>
+                <TextBlock Text="{Binding TotalLumber}" Foreground="#88cc88" FontWeight="Bold" Margin="0,0,14,0"/>
+                <TextBlock Text="Stone: " Foreground="#aaaaee"/>
+                <TextBlock Text="{Binding TotalStone}" Foreground="#aaaaee" FontWeight="Bold" Margin="0,0,14,0"/>
+                <TextBlock Text="Metal: " Foreground="#ccaa66"/>
+                <TextBlock Text="{Binding TotalMetal}" Foreground="#ccaa66" FontWeight="Bold" Margin="0,0,14,0"/>
+                <TextBlock Text="Petricite: " Foreground="#cc88cc"/>
+                <TextBlock Text="{Binding TotalPetricite}" Foreground="#cc88cc" FontWeight="Bold" Margin="0,0,20,0"/>
+                <TextBlock Text="Score: " Foreground="#e2d6a0" FontWeight="SemiBold"/>
+                <TextBlock Text="{Binding Score}" Foreground="#e2d6a0" FontWeight="Bold" FontSize="15"/>
+            </StackPanel>
+        </Border>
+
+        <!-- City grid -->
+        <DataGrid x:Name="CityGrid" ItemsSource="{Binding Cities}"
+                  AutoGenerateColumns="False" IsReadOnly="True"
+                  CanUserSortColumns="True" CanUserResizeColumns="True"
+                  SelectionMode="Single" SelectionUnit="FullRow"
+                  HeadersVisibility="Column" RowHeight="26">
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="City" Binding="{Binding CityId}" Width="50"/>
+                <DataGridTextColumn Header="Terrain" Binding="{Binding Terrain}" Width="180"/>
+                <DataGridTextColumn Header="Tiles" Binding="{Binding Tiles}" Width="*"/>
+                <DataGridTextColumn Header="Lumber" Binding="{Binding Lumber}" Width="80"/>
+                <DataGridTextColumn Header="Stone" Binding="{Binding Stone}" Width="80"/>
+                <DataGridTextColumn Header="Metal" Binding="{Binding Metal}" Width="80"/>
+                <DataGridTextColumn Header="Petricite" Binding="{Binding Petricite}" Width="80"/>
+            </DataGrid.Columns>
+        </DataGrid>
+
+    </DockPanel>
+</Window>
+
