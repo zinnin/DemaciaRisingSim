@@ -1,7 +1,7 @@
 namespace DemaciaRisingSim.Core;
 
 /// <summary>
-/// The type of production tile that can be placed in a city.
+/// The type of production tile that can be placed in a settlement.
 /// </summary>
 public enum TileType
 {
@@ -16,7 +16,7 @@ public enum TileType
 }
 
 /// <summary>
-/// Terrain types that affect city production and tile restrictions.
+/// Terrain types that affect settlement production and tile restrictions.
 /// </summary>
 [Flags]
 public enum TerrainType

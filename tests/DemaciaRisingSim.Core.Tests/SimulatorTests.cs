@@ -4,17 +4,17 @@ namespace DemaciaRisingSim.Core.Tests;
 
 public class SimulatorTests
 {
-    // --- CityOutput tests ---
+    // --- SettlementOutput tests ---
 
     [Fact]
-    public void CityOutput_AllLumber_ReturnsCorrectLumber()
+    public void SettlementOutput_AllLumber_ReturnsCorrectLumber()
     {
-        var city = new City("X", TerrainType.None, [], 3)
+        var settlement = new Settlement("X", TerrainType.None, [], 3)
         {
             Tiles = [TileType.Lumber, TileType.Lumber, TileType.Lumber],
             Multiplier = 1.0,
         };
-        var output = Simulator.CityOutput(city);
+        var output = Simulator.SettlementOutput(settlement);
         Assert.Equal(3 * GameConstants.LumberTileValue, output.Lumber);
         Assert.Equal(0, output.Stone);
         Assert.Equal(0, output.Metal);
@@ -22,66 +22,66 @@ public class SimulatorTests
     }
 
     [Fact]
-    public void CityOutput_Mountain_GrantsStoneBonusTiles()
+    public void SettlementOutput_Mountain_GrantsStoneBonusTiles()
     {
-        var city = new City("X", TerrainType.Mountain, [], 1)
+        var settlement = new Settlement("X", TerrainType.Mountain, [], 1)
         {
             Tiles = [TileType.Stone],
             Multiplier = 1.0,
         };
-        var output = Simulator.CityOutput(city);
+        var output = Simulator.SettlementOutput(settlement);
         // 1 stone tile + 2 bonus tiles from mountain = 3 * StoneTileValue
         Assert.Equal(3 * GameConstants.StoneTileValue, output.Stone);
     }
 
     [Fact]
-    public void CityOutput_Border_GrantsMetalBonusTiles()
+    public void SettlementOutput_Border_GrantsMetalBonusTiles()
     {
-        var city = new City("X", TerrainType.Border, [], 1)
+        var settlement = new Settlement("X", TerrainType.Border, [], 1)
         {
             Tiles = [TileType.Metal],
             Multiplier = 1.0,
         };
-        var output = Simulator.CityOutput(city);
+        var output = Simulator.SettlementOutput(settlement);
         // 1 metal tile + 2 bonus tiles from border = 3 * MetalTileValue
         Assert.Equal(3 * GameConstants.MetalTileValue, output.Metal);
     }
 
     [Fact]
-    public void CityOutput_Heartland_AppliesLumberBonus()
+    public void SettlementOutput_Heartland_AppliesLumberBonus()
     {
-        var city = new City("X", TerrainType.Heartland, [], 2)
+        var settlement = new Settlement("X", TerrainType.Heartland, [], 2)
         {
             Tiles = [TileType.Lumber, TileType.Lumber],
             Multiplier = 1.0,
         };
-        var output = Simulator.CityOutput(city);
+        var output = Simulator.SettlementOutput(settlement);
         // Heartland gives +0.25 lumber multiplier: 2 * 150 * 1.25 = 375
         int expected = (int)Math.Floor(2 * GameConstants.LumberTileValue * (1.0 + GameConstants.HeartlandLumberBonus));
         Assert.Equal(expected, output.Lumber);
     }
 
     [Fact]
-    public void CityOutput_Petricite_IsOnlyAllowedTileTypeForPetriciteOutput()
+    public void SettlementOutput_Petricite_IsOnlyAllowedTileTypeForPetriciteOutput()
     {
-        var city = new City("X", TerrainType.Petricite, [], 2)
+        var settlement = new Settlement("X", TerrainType.Petricite, [], 2)
         {
             Tiles = [TileType.Petricite, TileType.Petricite],
             Multiplier = 1.0,
         };
-        var output = Simulator.CityOutput(city);
+        var output = Simulator.SettlementOutput(settlement);
         Assert.Equal(2 * GameConstants.PetriciteTileValue, output.Petricite);
     }
 
     [Fact]
-    public void CityOutput_Multiplier_ScalesProduction()
+    public void SettlementOutput_Multiplier_ScalesProduction()
     {
-        var city = new City("X", TerrainType.None, [], 2)
+        var settlement = new Settlement("X", TerrainType.None, [], 2)
         {
             Tiles = [TileType.Lumber, TileType.Stone],
             Multiplier = 1.2,
         };
-        var output = Simulator.CityOutput(city);
+        var output = Simulator.SettlementOutput(settlement);
         Assert.Equal((int)Math.Floor(GameConstants.LumberTileValue * 1.2), output.Lumber);
         Assert.Equal((int)Math.Floor(GameConstants.StoneTileValue * 1.2), output.Stone);
     }
@@ -95,9 +95,9 @@ public class SimulatorTests
         // All tiles default to Lumber (0)
         var output = Simulator.BoardOutput(board);
         Assert.True(output.Lumber > 0);
-        // Mountain cities get stone bonus tiles even without stone tiles placed
+        // Mountain settlements get stone bonus tiles even without stone tiles placed
         Assert.True(output.Stone > 0);
-        // Border cities get metal bonus tiles even without metal tiles placed
+        // Border settlements get metal bonus tiles even without metal tiles placed
         Assert.True(output.Metal > 0);
         Assert.Equal(0, output.Petricite);
     }

@@ -46,7 +46,7 @@
         <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
             <TextBlock Text="Demacia Rising — Board Simulator" FontSize="22" FontWeight="Bold"
                        Foreground="#e2d6a0"/>
-            <TextBlock Text="Visualize city layouts and optimize tile assignments for maximum production score"
+            <TextBlock Text="Visualize settlement layouts and optimize tile assignments for maximum production score"
                        Foreground="#aaaacc" FontSize="12" Margin="0,2,0,0"/>
         </StackPanel>
 
@@ -76,14 +76,14 @@
             </StackPanel>
         </Border>
 
-        <!-- City grid -->
-        <DataGrid x:Name="CityGrid" ItemsSource="{Binding Cities}"
+        <!-- Settlement grid -->
+        <DataGrid x:Name="SettlementGrid" ItemsSource="{Binding Settlements}"
                   AutoGenerateColumns="False" IsReadOnly="True"
                   CanUserSortColumns="True" CanUserResizeColumns="True"
                   SelectionMode="Single" SelectionUnit="FullRow"
                   HeadersVisibility="Column" RowHeight="26">
             <DataGrid.Columns>
-                <DataGridTextColumn Header="City" Binding="{Binding CityId}" Width="160"/>
+                <DataGridTextColumn Header="Settlement" Binding="{Binding SettlementName}" Width="160"/>
                 <DataGridTextColumn Header="Terrain" Binding="{Binding Terrain}" Width="180"/>
                 <DataGridTextColumn Header="Tiles" Binding="{Binding Tiles}" Width="*"/>
                 <DataGridTextColumn Header="Lumber" Binding="{Binding Lumber}" Width="80"/>

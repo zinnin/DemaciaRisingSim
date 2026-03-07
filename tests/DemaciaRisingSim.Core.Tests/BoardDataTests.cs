@@ -5,14 +5,14 @@ namespace DemaciaRisingSim.Core.Tests;
 public class BoardDataTests
 {
     [Fact]
-    public void CreateDefaultBoard_Has16Cities()
+    public void CreateDefaultBoard_Has16Settlements()
     {
         var board = BoardData.CreateDefaultBoard();
         Assert.Equal(16, board.Count);
     }
 
     [Fact]
-    public void CreateDefaultBoard_AllCitiesHaveCorrectNames()
+    public void CreateDefaultBoard_AllSettlementsHaveCorrectNames()
     {
         var board = BoardData.CreateDefaultBoard();
         var expected = new[]
@@ -22,14 +22,14 @@ public class BoardDataTests
             "Meltridge", "Pinara", "Terbisia", "Tylburne", "Uwendale", "Vaskasia",
         };
         foreach (var name in expected)
-            Assert.True(board.ContainsKey(name), $"Board should contain city {name}");
+            Assert.True(board.ContainsKey(name), $"Board should contain settlement {name}");
     }
 
     [Fact]
-    public void CreateDefaultBoard_HeartlandCities_HaveSixTiles()
+    public void CreateDefaultBoard_HeartlandSettlements_HaveSixTiles()
     {
         var board = BoardData.CreateDefaultBoard();
-        // Heartland cities: Brookhollow, Hayneath, Jandelle, Vaskasia (6 tiles each)
+        // Heartland settlements: Brookhollow, Hayneath, Jandelle, Vaskasia (6 tiles each)
         foreach (var name in new[] { "Brookhollow", "Hayneath", "Jandelle", "Vaskasia" })
             Assert.Equal(6, board[name].Tiles.Length);
     }
@@ -44,15 +44,15 @@ public class BoardDataTests
     }
 
     [Fact]
-    public void CreateDefaultBoard_PetriciteCities_AllowPetricite()
+    public void CreateDefaultBoard_PetriciteSettlements_AllowPetricite()
     {
         var board = BoardData.CreateDefaultBoard();
         foreach (var name in new[] { "The Great City", "Dawnhold", "High Silvermere", "Tylburne" })
-            Assert.True(board[name].AllowsPetricite, $"City {name} should allow petricite tiles");
+            Assert.True(board[name].AllowsPetricite, $"Settlement {name} should allow petricite tiles");
     }
 
     [Fact]
-    public void CreateDefaultBoard_NonPetriciteCities_DoNotAllowPetricite()
+    public void CreateDefaultBoard_NonPetriciteSettlements_DoNotAllowPetricite()
     {
         var board = BoardData.CreateDefaultBoard();
         foreach (var name in new[]
@@ -60,31 +60,31 @@ public class BoardDataTests
             "Brookhollow", "Cloudfield", "Evenmoor", "Fossbarrow", "Hawkstone",
             "Hayneath", "Jandelle", "Meltridge", "Pinara", "Terbisia", "Uwendale", "Vaskasia",
         })
-            Assert.False(board[name].AllowsPetricite, $"City {name} should not allow petricite tiles");
+            Assert.False(board[name].AllowsPetricite, $"Settlement {name} should not allow petricite tiles");
     }
 
     [Fact]
-    public void CreateDefaultBoard_MountainCities_HaveCorrectTerrain()
+    public void CreateDefaultBoard_MountainSettlements_HaveCorrectTerrain()
     {
         var board = BoardData.CreateDefaultBoard();
         foreach (var name in new[] { "Evenmoor", "Hawkstone", "Pinara", "Uwendale" })
-            Assert.True(board[name].Terrain.HasFlag(TerrainType.Mountain), $"City {name} should be mountain terrain");
+            Assert.True(board[name].Terrain.HasFlag(TerrainType.Mountain), $"Settlement {name} should be mountain terrain");
     }
 
     [Fact]
-    public void CreateDefaultBoard_BorderCities_HaveCorrectTerrain()
+    public void CreateDefaultBoard_BorderSettlements_HaveCorrectTerrain()
     {
         var board = BoardData.CreateDefaultBoard();
         foreach (var name in new[] { "Cloudfield", "Fossbarrow", "Meltridge", "Terbisia" })
-            Assert.True(board[name].Terrain.HasFlag(TerrainType.Border), $"City {name} should be border terrain");
+            Assert.True(board[name].Terrain.HasFlag(TerrainType.Border), $"Settlement {name} should be border terrain");
     }
 
     [Fact]
     public void CreateDefaultBoard_AllMultipliersStartAtOne()
     {
         var board = BoardData.CreateDefaultBoard();
-        foreach (var city in board.Values)
-            Assert.Equal(1.0, city.Multiplier);
+        foreach (var settlement in board.Values)
+            Assert.Equal(1.0, settlement.Multiplier);
     }
 
     [Fact]

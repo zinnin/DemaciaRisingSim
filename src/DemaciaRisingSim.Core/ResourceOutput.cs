@@ -1,7 +1,7 @@
 namespace DemaciaRisingSim.Core;
 
 /// <summary>
-/// The resource output for a single city or the entire board.
+/// The resource output for a single settlement or the entire board.
 /// </summary>
 public record ResourceOutput(int Lumber, int Stone, int Metal, int Petricite)
 {

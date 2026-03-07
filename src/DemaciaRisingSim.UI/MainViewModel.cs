@@ -6,9 +6,9 @@ using DemaciaRisingSim.Core;
 namespace DemaciaRisingSim.UI;
 
 /// <summary>
-/// ViewModel for a single city row displayed in the board grid.
+/// ViewModel for a single settlement row displayed in the board grid.
 /// </summary>
-public class CityViewModel : INotifyPropertyChanged
+public class SettlementViewModel : INotifyPropertyChanged
 {
     private string _tiles = string.Empty;
     private int _lumber;
@@ -16,7 +16,7 @@ public class CityViewModel : INotifyPropertyChanged
     private int _metal;
     private int _petricite;
 
-    public string CityId { get; set; } = string.Empty;
+    public string SettlementName { get; set; } = string.Empty;
     public string Terrain { get; set; } = string.Empty;
 
     public string Tiles
@@ -68,9 +68,9 @@ public class MainViewModel : INotifyPropertyChanged
     private string _statusMessage = "Ready. Click 'Load Default Board' to initialize the board, or 'Optimize' to find the best layout.";
     private bool _isBusy;
 
-    private Dictionary<string, City> _board;
+    private Dictionary<string, Settlement> _board;
 
-    public ObservableCollection<CityViewModel> Cities { get; } = [];
+    public ObservableCollection<SettlementViewModel> Settlements { get; } = [];
 
     public string TotalLumber
     {
@@ -147,20 +147,20 @@ public class MainViewModel : INotifyPropertyChanged
         }
     }
 
-    private void LoadBoard(Dictionary<string, City> board)
+    private void LoadBoard(Dictionary<string, Settlement> board)
     {
-        Cities.Clear();
+        Settlements.Clear();
 
         foreach (var kv in board)
         {
-            var city = kv.Value;
-            var output = Simulator.CityOutput(city);
+            var settlement = kv.Value;
+            var output = Simulator.SettlementOutput(settlement);
 
-            Cities.Add(new CityViewModel
+            Settlements.Add(new SettlementViewModel
             {
-                CityId = city.Name,
-                Terrain = city.Terrain.ToString(),
-                Tiles = string.Join(", ", city.Tiles.Select(t => t.ToString())),
+                SettlementName = settlement.Name,
+                Terrain = settlement.Terrain.ToString(),
+                Tiles = string.Join(", ", settlement.Tiles.Select(t => t.ToString())),
                 Lumber = output.Lumber,
                 Stone = output.Stone,
                 Metal = output.Metal,
@@ -171,7 +171,7 @@ public class MainViewModel : INotifyPropertyChanged
         UpdateTotals(board);
     }
 
-    private void UpdateTotals(Dictionary<string, City> board)
+    private void UpdateTotals(Dictionary<string, Settlement> board)
     {
         var total = Simulator.BoardOutput(board);
         TotalLumber = total.Lumber.ToString();
