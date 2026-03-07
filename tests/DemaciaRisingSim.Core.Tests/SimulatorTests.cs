@@ -9,7 +9,7 @@ public class SimulatorTests
     [Fact]
     public void CityOutput_AllLumber_ReturnsCorrectLumber()
     {
-        var city = new City("X", TerrainType.None, [], [], 3)
+        var city = new City("X", TerrainType.None, [], 3)
         {
             Tiles = [TileType.Lumber, TileType.Lumber, TileType.Lumber],
             Multiplier = 1.0,
@@ -24,7 +24,7 @@ public class SimulatorTests
     [Fact]
     public void CityOutput_Mountain_GrantsStoneBonusTiles()
     {
-        var city = new City("X", TerrainType.Mountain, [], [], 1)
+        var city = new City("X", TerrainType.Mountain, [], 1)
         {
             Tiles = [TileType.Stone],
             Multiplier = 1.0,
@@ -37,7 +37,7 @@ public class SimulatorTests
     [Fact]
     public void CityOutput_Border_GrantsMetalBonusTiles()
     {
-        var city = new City("X", TerrainType.Border, [], [], 1)
+        var city = new City("X", TerrainType.Border, [], 1)
         {
             Tiles = [TileType.Metal],
             Multiplier = 1.0,
@@ -50,7 +50,7 @@ public class SimulatorTests
     [Fact]
     public void CityOutput_Heartland_AppliesLumberBonus()
     {
-        var city = new City("X", TerrainType.Heartland, [], [], 2)
+        var city = new City("X", TerrainType.Heartland, [], 2)
         {
             Tiles = [TileType.Lumber, TileType.Lumber],
             Multiplier = 1.0,
@@ -64,7 +64,7 @@ public class SimulatorTests
     [Fact]
     public void CityOutput_Petricite_IsOnlyAllowedTileTypeForPetriciteOutput()
     {
-        var city = new City("X", TerrainType.Petricite, [], [], 2)
+        var city = new City("X", TerrainType.Petricite, [], 2)
         {
             Tiles = [TileType.Petricite, TileType.Petricite],
             Multiplier = 1.0,
@@ -76,7 +76,7 @@ public class SimulatorTests
     [Fact]
     public void CityOutput_Multiplier_ScalesProduction()
     {
-        var city = new City("X", TerrainType.None, [], [], 2)
+        var city = new City("X", TerrainType.None, [], 2)
         {
             Tiles = [TileType.Lumber, TileType.Stone],
             Multiplier = 1.2,
@@ -106,12 +106,12 @@ public class SimulatorTests
     public void BoardOutput_DoesNotMutateInputBoard()
     {
         var board = BoardData.CreateDefaultBoard();
-        double originalMultiplier = board["A"].Multiplier;
+        double originalMultiplier = board["The Great City"].Multiplier;
 
         Simulator.BoardOutput(board);
 
         // Input board should be unchanged
-        Assert.Equal(originalMultiplier, board["A"].Multiplier);
+        Assert.Equal(originalMultiplier, board["The Great City"].Multiplier);
     }
 
     [Fact]
@@ -120,8 +120,8 @@ public class SimulatorTests
         var baseBoard = BoardData.CreateDefaultBoard();
         var marketBoard = BoardData.Clone(baseBoard);
 
-        // Add a marketplace to city A (neighbors: D, I, N)
-        marketBoard["A"].Tiles[0] = TileType.Marketplace;
+        // Add a marketplace to The Great City (neighbors: Dawnhold, High Silvermere, Tylburne)
+        marketBoard["The Great City"].Tiles[0] = TileType.Marketplace;
 
         var baseOutput = Simulator.BoardOutput(baseBoard);
         var marketOutput = Simulator.BoardOutput(marketBoard);
@@ -164,9 +164,9 @@ public class SimulatorTests
     public void Score_IsBetweenZeroAndPositive()
     {
         var board = BoardData.CreateDefaultBoard();
-        board["A"].Tiles[0] = TileType.Stone;
-        board["B"].Tiles[0] = TileType.Metal;
-        board["C"].Tiles[0] = TileType.Lumber;
+        board["The Great City"].Tiles[0] = TileType.Stone;
+        board["Brookhollow"].Tiles[0] = TileType.Metal;
+        board["Cloudfield"].Tiles[0] = TileType.Lumber;
 
         double score = Simulator.Score(board);
         Assert.True(score >= 0);

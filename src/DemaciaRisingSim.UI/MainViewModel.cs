@@ -158,7 +158,7 @@ public class MainViewModel : INotifyPropertyChanged
 
             Cities.Add(new CityViewModel
             {
-                CityId = city.Id,
+                CityId = city.Name,
                 Terrain = city.Terrain.ToString(),
                 Tiles = string.Join(", ", city.Tiles.Select(t => t.ToString())),
                 Lumber = output.Lumber,

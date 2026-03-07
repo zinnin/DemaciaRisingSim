@@ -1,8 +1,9 @@
 namespace DemaciaRisingSim.Core;
 
 /// <summary>
-/// Provides the default board configuration for Demacia Rising with all 16 cities (A-P).
-/// Each city has its terrain, tile count, neighbor list, and academy buff zone defined.
+/// Provides the default board configuration for Demacia Rising with all 16 cities.
+/// Each city has its terrain, tile count, and academy buff zone defined.
+/// City connections (for marketplace bonuses) are set up via AddLink.
 /// </summary>
 public static class BoardData
 {
@@ -11,103 +12,155 @@ public static class BoardData
     /// </summary>
     public static Dictionary<string, City> CreateDefaultBoard()
     {
+        var theGreatCity   = new City("The Great City",  TerrainType.Petricite,
+            academyBuff: ["The Great City"],
+            tileCount: 5);
+
+        var brookhollow    = new City("Brookhollow",     TerrainType.Heartland,
+            academyBuff: ["Brookhollow", "Hayneath", "Jandelle", "Tylburne", "Vaskasia"],
+            tileCount: 6);
+
+        var cloudfield     = new City("Cloudfield",      TerrainType.Border,
+            academyBuff: ["Cloudfield", "Dawnhold", "Fossbarrow", "Meltridge", "Terbisia"],
+            tileCount: 5);
+
+        var dawnhold       = new City("Dawnhold",        TerrainType.Petricite | TerrainType.Border,
+            academyBuff: ["Cloudfield", "Dawnhold", "Fossbarrow", "Meltridge", "Terbisia"],
+            tileCount: 5);
+
+        var evenmoor       = new City("Evenmoor",        TerrainType.Mountain,
+            academyBuff: ["Evenmoor", "Hawkstone", "High Silvermere", "Pinara", "Uwendale"],
+            tileCount: 5);
+
+        var fossbarrow     = new City("Fossbarrow",      TerrainType.Border,
+            academyBuff: ["Cloudfield", "Dawnhold", "Fossbarrow", "Meltridge", "Terbisia"],
+            tileCount: 5);
+
+        var hawkstone      = new City("Hawkstone",       TerrainType.Mountain,
+            academyBuff: ["Evenmoor", "Hawkstone", "High Silvermere", "Pinara", "Uwendale"],
+            tileCount: 5);
+
+        var hayneath       = new City("Hayneath",        TerrainType.Heartland,
+            academyBuff: ["Brookhollow", "Hayneath", "Jandelle", "Tylburne", "Vaskasia"],
+            tileCount: 6);
+
+        var highSilvermere = new City("High Silvermere", TerrainType.Petricite | TerrainType.Mountain,
+            academyBuff: ["Evenmoor", "Hawkstone", "High Silvermere", "Pinara", "Uwendale"],
+            tileCount: 5);
+
+        var jandelle       = new City("Jandelle",        TerrainType.Heartland,
+            academyBuff: ["Brookhollow", "Hayneath", "Jandelle", "Tylburne", "Vaskasia"],
+            tileCount: 6);
+
+        var meltridge      = new City("Meltridge",       TerrainType.Border,
+            academyBuff: ["Cloudfield", "Dawnhold", "Fossbarrow", "Meltridge", "Terbisia"],
+            tileCount: 5);
+
+        var pinara         = new City("Pinara",          TerrainType.Mountain,
+            academyBuff: ["Evenmoor", "Hawkstone", "High Silvermere", "Pinara", "Uwendale"],
+            tileCount: 5);
+
+        var terbisia       = new City("Terbisia",        TerrainType.Border,
+            academyBuff: ["Cloudfield", "Dawnhold", "Fossbarrow", "Meltridge", "Terbisia"],
+            tileCount: 5);
+
+        var tylburne       = new City("Tylburne",        TerrainType.Petricite | TerrainType.Heartland,
+            academyBuff: ["Brookhollow", "Hayneath", "Jandelle", "Tylburne", "Vaskasia"],
+            tileCount: 6);
+
+        var uwendale       = new City("Uwendale",        TerrainType.Mountain,
+            academyBuff: ["Evenmoor", "Hawkstone", "High Silvermere", "Pinara", "Uwendale"],
+            tileCount: 5);
+
+        var vaskasia       = new City("Vaskasia",        TerrainType.Heartland,
+            academyBuff: ["Brookhollow", "Hayneath", "Jandelle", "Tylburne", "Vaskasia"],
+            tileCount: 6);
+
+        // Set up city connections (marketplace bonus links)
+        theGreatCity.AddLink(dawnhold);
+        theGreatCity.AddLink(highSilvermere);
+        theGreatCity.AddLink(tylburne);
+
+        brookhollow.AddLink(evenmoor);
+        brookhollow.AddLink(terbisia);
+        brookhollow.AddLink(tylburne);
+        brookhollow.AddLink(vaskasia);
+
+        cloudfield.AddLink(hayneath);
+        cloudfield.AddLink(jandelle);
+        cloudfield.AddLink(terbisia);
+        cloudfield.AddLink(tylburne);
+
+        dawnhold.AddLink(theGreatCity);
+        dawnhold.AddLink(pinara);
+        dawnhold.AddLink(vaskasia);
+
+        evenmoor.AddLink(brookhollow);
+        evenmoor.AddLink(vaskasia);
+
+        fossbarrow.AddLink(highSilvermere);
+        fossbarrow.AddLink(pinara);
+
+        hawkstone.AddLink(highSilvermere);
+        hawkstone.AddLink(uwendale);
+
+        hayneath.AddLink(cloudfield);
+        hayneath.AddLink(jandelle);
+
+        highSilvermere.AddLink(theGreatCity);
+        highSilvermere.AddLink(fossbarrow);
+        highSilvermere.AddLink(hawkstone);
+        highSilvermere.AddLink(jandelle);
+        highSilvermere.AddLink(pinara);
+        highSilvermere.AddLink(uwendale);
+
+        jandelle.AddLink(cloudfield);
+        jandelle.AddLink(hayneath);
+        jandelle.AddLink(highSilvermere);
+        jandelle.AddLink(meltridge);
+        jandelle.AddLink(tylburne);
+
+        meltridge.AddLink(jandelle);
+        meltridge.AddLink(uwendale);
+
+        pinara.AddLink(dawnhold);
+        pinara.AddLink(fossbarrow);
+        pinara.AddLink(highSilvermere);
+
+        terbisia.AddLink(brookhollow);
+        terbisia.AddLink(cloudfield);
+
+        tylburne.AddLink(theGreatCity);
+        tylburne.AddLink(brookhollow);
+        tylburne.AddLink(cloudfield);
+        tylburne.AddLink(jandelle);
+
+        uwendale.AddLink(hawkstone);
+        uwendale.AddLink(highSilvermere);
+        uwendale.AddLink(meltridge);
+
+        vaskasia.AddLink(brookhollow);
+        vaskasia.AddLink(dawnhold);
+        vaskasia.AddLink(evenmoor);
+
         return new Dictionary<string, City>
         {
-            ["A"] = new City("A",
-                terrain: TerrainType.Petricite,
-                neighbors: ["D", "I", "N"],
-                academyBuff: ["A"],
-                tileCount: 5),
-
-            ["B"] = new City("B",
-                terrain: TerrainType.Heartland,
-                neighbors: ["E", "M", "N", "P"],
-                academyBuff: ["B", "H", "J", "N", "P"],
-                tileCount: 6),
-
-            ["C"] = new City("C",
-                terrain: TerrainType.Border,
-                neighbors: ["H", "J", "M", "N"],
-                academyBuff: ["C", "D", "F", "K", "M"],
-                tileCount: 5),
-
-            ["D"] = new City("D",
-                terrain: TerrainType.Petricite | TerrainType.Border,
-                neighbors: ["A", "L", "P"],
-                academyBuff: ["C", "D", "F", "K", "M"],
-                tileCount: 5),
-
-            ["E"] = new City("E",
-                terrain: TerrainType.Mountain,
-                neighbors: ["B", "P"],
-                academyBuff: ["E", "G", "I", "L", "O"],
-                tileCount: 5),
-
-            ["F"] = new City("F",
-                terrain: TerrainType.Border,
-                neighbors: ["I", "L"],
-                academyBuff: ["C", "D", "F", "K", "M"],
-                tileCount: 5),
-
-            ["G"] = new City("G",
-                terrain: TerrainType.Mountain,
-                neighbors: ["I", "O"],
-                academyBuff: ["E", "G", "I", "L", "O"],
-                tileCount: 5),
-
-            ["H"] = new City("H",
-                terrain: TerrainType.Heartland,
-                neighbors: ["C", "J"],
-                academyBuff: ["B", "H", "J", "N", "P"],
-                tileCount: 6),
-
-            ["I"] = new City("I",
-                terrain: TerrainType.Petricite | TerrainType.Mountain,
-                neighbors: ["A", "F", "G", "J", "L", "O"],
-                academyBuff: ["E", "G", "I", "L", "O"],
-                tileCount: 5),
-
-            ["J"] = new City("J",
-                terrain: TerrainType.Heartland,
-                neighbors: ["C", "H", "I", "K", "N"],
-                academyBuff: ["B", "H", "J", "N", "P"],
-                tileCount: 6),
-
-            ["K"] = new City("K",
-                terrain: TerrainType.Border,
-                neighbors: ["J", "O"],
-                academyBuff: ["C", "D", "F", "K", "M"],
-                tileCount: 5),
-
-            ["L"] = new City("L",
-                terrain: TerrainType.Mountain,
-                neighbors: ["D", "F", "I"],
-                academyBuff: ["E", "G", "I", "L", "O"],
-                tileCount: 5),
-
-            ["M"] = new City("M",
-                terrain: TerrainType.Border,
-                neighbors: ["B", "C"],
-                academyBuff: ["C", "D", "F", "K", "M"],
-                tileCount: 5),
-
-            ["N"] = new City("N",
-                terrain: TerrainType.Petricite | TerrainType.Heartland,
-                neighbors: ["A", "B", "C", "J"],
-                academyBuff: ["B", "H", "J", "N", "P"],
-                tileCount: 6),
-
-            ["O"] = new City("O",
-                terrain: TerrainType.Mountain,
-                neighbors: ["G", "I", "K"],
-                academyBuff: ["E", "G", "I", "L", "O"],
-                tileCount: 5),
-
-            ["P"] = new City("P",
-                terrain: TerrainType.Heartland,
-                neighbors: ["B", "D", "E"],
-                academyBuff: ["B", "H", "J", "N", "P"],
-                tileCount: 6),
+            [theGreatCity.Name]   = theGreatCity,
+            [brookhollow.Name]    = brookhollow,
+            [cloudfield.Name]     = cloudfield,
+            [dawnhold.Name]       = dawnhold,
+            [evenmoor.Name]       = evenmoor,
+            [fossbarrow.Name]     = fossbarrow,
+            [hawkstone.Name]      = hawkstone,
+            [hayneath.Name]       = hayneath,
+            [highSilvermere.Name] = highSilvermere,
+            [jandelle.Name]       = jandelle,
+            [meltridge.Name]      = meltridge,
+            [pinara.Name]         = pinara,
+            [terbisia.Name]       = terbisia,
+            [tylburne.Name]       = tylburne,
+            [uwendale.Name]       = uwendale,
+            [vaskasia.Name]       = vaskasia,
         };
     }
 

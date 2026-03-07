@@ -5,17 +5,19 @@ namespace DemaciaRisingSim.Core;
 /// </summary>
 public class City
 {
-    /// <summary>The unique identifier for this city (e.g., "A", "B").</summary>
-    public string Id { get; }
+    private readonly List<string> _neighbors = [];
+
+    /// <summary>The name of this city (e.g., "The Great City", "Brookhollow").</summary>
+    public string Name { get; }
 
     /// <summary>The terrain type(s) for this city.</summary>
     public TerrainType Terrain { get; }
 
-    /// <summary>The IDs of neighboring cities that receive marketplace bonuses from this city.</summary>
-    public IReadOnlyList<string> Neighbors { get; }
+    /// <summary>The names of neighboring cities that receive marketplace bonuses from this city.</summary>
+    public IReadOnlyList<string> Neighbors => _neighbors;
 
     /// <summary>
-    /// The IDs of cities that receive academy bonuses from an academy placed in this city.
+    /// The names of cities that receive academy bonuses from an academy placed in this city.
     /// Typically includes the city's own zone plus surrounding cities.
     /// </summary>
     public IReadOnlyList<string> AcademyBuff { get; }
@@ -26,15 +28,20 @@ public class City
     /// <summary>The current production multiplier (affected by marketplace and academy tiles).</summary>
     public double Multiplier { get; set; } = 1.0;
 
-    public City(string id, TerrainType terrain, IReadOnlyList<string> neighbors, IReadOnlyList<string> academyBuff, int tileCount)
+    public City(string name, TerrainType terrain, IReadOnlyList<string> academyBuff, int tileCount)
     {
-        Id = id;
+        Name = name;
         Terrain = terrain;
-        Neighbors = neighbors;
         AcademyBuff = academyBuff;
         Tiles = new TileType[tileCount];
         Multiplier = 1.0;
     }
+
+    /// <summary>
+    /// Adds a directional link from this city to the given neighboring city.
+    /// A marketplace tile placed in this city will boost the linked city's multiplier.
+    /// </summary>
+    public void AddLink(City other) => _neighbors.Add(other.Name);
 
     /// <summary>
     /// Returns true if petricite tiles are allowed in this city.
@@ -45,11 +52,13 @@ public class City
     /// <summary>Creates a deep copy of this city.</summary>
     public City Clone()
     {
-        var clone = new City(Id, Terrain, Neighbors, AcademyBuff, Tiles.Length)
+        var clone = new City(Name, Terrain, AcademyBuff, Tiles.Length)
         {
             Tiles = (TileType[])Tiles.Clone(),
             Multiplier = Multiplier,
         };
+        foreach (var neighbor in _neighbors)
+            clone._neighbors.Add(neighbor);
         return clone;
     }
 }
