@@ -750,6 +750,41 @@ public class SimulatorTests
     }
 
     [Fact]
+    public void SmartAllocateBoard_RequiredStructures_PreferLowConnectionSettlements()
+    {
+        // Brookhollow (4 connections) and Vaskasia (3 connections) are both Heartland settlements
+        // with identical per-slot production values.  The tie-breaking on connection count must
+        // ensure the three required structures land in Vaskasia (fewer connections) rather than
+        // Brookhollow, preserving Brookhollow's slots for production structures that benefit more
+        // from Marketplace amplification.
+        var board = BoardData.CreateDefaultBoard();
+        var settings = new SimulationSettings
+        {
+            MaxBuildingLevel          = 1,
+            RequireDurandsWorkshop    = true,
+            RequireShrineOfVeiledLady = true,
+            RequireQuartermaster      = true,
+            FoodTargetPerSettlement   = 0,
+        };
+        var allocated = Simulator.SmartAllocateBoard(board, settings);
+
+        // Brookhollow has 4 connections; Vaskasia has 3 and equal slot values.
+        // Required structures must NOT end up in Brookhollow.
+        var brookhollow = allocated["Brookhollow"];
+        var requiredTypes = new HashSet<StructureType>
+        {
+            StructureType.DurandsWorkshop,
+            StructureType.ShrineOfVeiledLady,
+            StructureType.Quartermaster,
+        };
+        Assert.False(
+            brookhollow.Structures.Any(s => requiredTypes.Contains(s.Type)),
+            "Brookhollow (4 connections) should not receive required structures when " +
+            "lower-connection settlements with equally-valued slots (e.g. Vaskasia, 3 connections) " +
+            "are available.");
+    }
+
+    [Fact]
     public void SmartAllocateBoard_FoodTarget_MetPerSettlement()
     {
         var board = BoardData.CreateDefaultBoard();

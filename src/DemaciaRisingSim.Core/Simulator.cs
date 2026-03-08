@@ -371,19 +371,27 @@ public static class Simulator
         var usedSlotSet   = new HashSet<(string, int)>(fixedSlots);
 
         // --- Step 6: Place required structures in the globally lowest-value slots ---
+        // Secondary sort key: connection count ascending, so that required (non-production)
+        // structures land in low-connection settlements first.  High-connection settlements
+        // benefit more from Marketplace amplification and should be preserved for production.
         var required = new List<Structure>();
         if (settings.RequireDurandsWorkshop)     required.Add(new Structure(StructureType.DurandsWorkshop,    1));
         if (settings.RequireShrineOfVeiledLady)  required.Add(new Structure(StructureType.ShrineOfVeiledLady, 1));
         if (settings.RequireQuartermaster)        required.Add(new Structure(StructureType.Quartermaster,       1));
 
+        var reqSortedSlots = allSlots
+            .OrderBy(x => x.Value)
+            .ThenBy(x => work.TryGetValue(x.Name, out var s) ? s.Neighbors.Count : 0)
+            .ToList();
+
         int reqIdx = 0;
         foreach (var req in required)
         {
-            while (reqIdx < sortedByValue.Count && usedSlotSet.Contains((sortedByValue[reqIdx].Name, sortedByValue[reqIdx].Slot)))
+            while (reqIdx < reqSortedSlots.Count && usedSlotSet.Contains((reqSortedSlots[reqIdx].Name, reqSortedSlots[reqIdx].Slot)))
                 reqIdx++;
-            if (reqIdx >= sortedByValue.Count) break;
+            if (reqIdx >= reqSortedSlots.Count) break;
 
-            var (name, slot, _) = sortedByValue[reqIdx++];
+            var (name, slot, _) = reqSortedSlots[reqIdx++];
             work[name].Structures[slot] = req;
             fixedSlots.Add((name, slot));
             usedSlotSet.Add((name, slot));
