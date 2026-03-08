@@ -132,7 +132,22 @@ public class SimulatorTests
     }
 
     [Fact]
-    public void SettlementOutput_Heartland_FirstFarmGrantsBonusFood()
+    public void SettlementOutput_Heartland_FirstTwoFarmsGrantBonusFood()
+    {
+        var settlement = new Settlement("X", EnvironmentType.Heartland, slotCount: 3)
+        {
+            Structures = [new Structure(StructureType.Farm, 1),
+                          new Structure(StructureType.Farm, 1),
+                          new Structure(StructureType.Farm, 1)],
+            Multiplier = 1.0,
+        };
+        var output = Simulator.SettlementOutput(settlement);
+        // Farm L1 = 1 Food each × 3; first two farms each get +1 Heartland bonus = 3 + 2 = 5 total
+        Assert.Equal(5, output.Food);
+    }
+
+    [Fact]
+    public void SettlementOutput_Heartland_TwoFarmsGrantBonusFood()
     {
         var settlement = new Settlement("X", EnvironmentType.Heartland, slotCount: 2)
         {
@@ -140,9 +155,8 @@ public class SimulatorTests
                           new Structure(StructureType.Farm, 1)],
             Multiplier = 1.0,
         };
-        var output = Simulator.SettlementOutput(settlement);
-        // Farm L1 = 1 Food each; first farm gets +1 Heartland bonus = 3 total
-        Assert.Equal(3, output.Food);
+        // 2 × 1 base + 2 Heartland bonus = 4
+        Assert.Equal(4, Simulator.SettlementOutput(settlement).Food);
     }
 
     [Fact]
@@ -154,6 +168,43 @@ public class SimulatorTests
             Multiplier = 1.0,
         };
         Assert.Equal(1, Simulator.SettlementOutput(settlement).Food);
+    }
+
+    [Fact]
+    public void SettlementOutput_Woodland_LumberIncreasedBy25Percent()
+    {
+        var settlement = new Settlement("X", EnvironmentType.Woodland, slotCount: 1)
+        {
+            Structures = [new Structure(StructureType.Lumberyard, 1)],
+            Multiplier = 1.0,
+        };
+        // Lumberyard L1 = 15 lumber; Woodland +25% = floor(15 * 1.25) = 18
+        Assert.Equal(18, Simulator.SettlementOutput(settlement).Lumber);
+    }
+
+    [Fact]
+    public void SettlementOutput_Woodland_LumberBonus_AppliesToRawBeforeMultiplier()
+    {
+        // Woodland 25% bonus is a terrain bonus applied before Academy/Marketplace multiplier.
+        // Both are combined into a single multiplier and floored once at the end:
+        // 15 * 1.25 * 1.1 = 20.625 → floor = 20
+        var settlement = new Settlement("X", EnvironmentType.Woodland, slotCount: 1)
+        {
+            Structures = [new Structure(StructureType.Lumberyard, 1)],
+            Multiplier = 1.1,
+        };
+        Assert.Equal(20, Simulator.SettlementOutput(settlement).Lumber);
+    }
+
+    [Fact]
+    public void SettlementOutput_NonWoodland_NoLumberBonus()
+    {
+        var settlement = new Settlement("X", EnvironmentType.Heartland, slotCount: 1)
+        {
+            Structures = [new Structure(StructureType.Lumberyard, 1)],
+            Multiplier = 1.0,
+        };
+        Assert.Equal(15, Simulator.SettlementOutput(settlement).Lumber);
     }
 
     [Fact]
@@ -328,6 +379,31 @@ public class SimulatorTests
                 expectedTargets.OrderBy(n => n).ToArray(),
                 actualTargets);
         }
+    }
+
+    [Fact]
+    public void BoardOutput_AcademyInWoodland_OnlyBuffsSelf()
+    {
+        // Academy only groups Heartland / Mountain / Border settlements.
+        // A Woodland settlement's Academy should buff only itself, not other Woodland settlements.
+        var woodland1 = new Settlement("W1", EnvironmentType.Woodland, slotCount: 2);
+        var woodland2 = new Settlement("W2", EnvironmentType.Woodland, slotCount: 1);
+        woodland1.Structures[0] = new Structure(StructureType.Lumberyard, 1);
+        woodland1.Structures[1] = new Structure(StructureType.Academy, 1);
+        woodland2.Structures[0] = new Structure(StructureType.Lumberyard, 1);
+
+        var board = new Dictionary<string, Settlement>
+        {
+            [woodland1.Name] = woodland1,
+            [woodland2.Name] = woodland2,
+        };
+
+        var output = Simulator.BoardOutput(board);
+
+        // W1 Academy L1 = 5% only on W1 (self).
+        // W1: Lumberyard L1 = 15 lumber × Woodland(×1.25) × Academy(×1.05) = floor(15*1.25*1.05) = 19
+        // W2: Lumberyard L1 = 15 lumber × Woodland(×1.25) only          = floor(15*1.25)      = 18
+        Assert.Equal(37, output.Lumber);
     }
 
     [Fact]

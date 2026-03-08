@@ -46,19 +46,25 @@ public static class Simulator
                 firstForgeBonus = true;
             }
 
-            // First Farm in a Heartland settlement: +1 Food (Heartland bonus).
+            // First two Farms in a Heartland settlement each grant +1 Food.
             if (structure.Type == StructureType.Farm &&
                 settlement.Environment.HasFlag(EnvironmentType.Heartland))
             {
                 heartlandFarmCount++;
-                if (heartlandFarmCount == 1)
+                if (heartlandFarmCount <= 2)
                     food += 1;
             }
         }
 
+        // Woodland terrain bonus: 25% increased lumber production.
+        // Applied before the academy/marketplace multiplier.
+        double lumberMultiplier = settlement.Multiplier;
+        if (settlement.Environment.HasFlag(EnvironmentType.Woodland))
+            lumberMultiplier *= 1.25;
+
         // Apply the production multiplier (from Marketplace and Academy structures).
         // Food is NOT multiplied — it is a capacity resource, not a production resource.
-        lumber    = (int)Math.Floor(lumber    * settlement.Multiplier);
+        lumber    = (int)Math.Floor(lumber    * lumberMultiplier);
         stone     = (int)Math.Floor(stone     * settlement.Multiplier);
         metal     = (int)Math.Floor(metal     * settlement.Multiplier);
         petricite = (int)Math.Floor(petricite * settlement.Multiplier);
@@ -81,8 +87,8 @@ public static class Simulator
 
         // Apply Marketplace and Academy multipliers (level-aware).
         // Academy buff targets are derived from shared primary environment (Heartland / Mountain / Border).
-        // Petricite is not a primary environment for academy grouping; Petricite-only settlements
-        // (e.g. The Great City) only buff themselves.
+        // Petricite and Woodland are not primary environments for academy grouping; settlements with only
+        // those environments (e.g. The Great City) only buff themselves.
         const EnvironmentType PrimaryMask = EnvironmentType.Heartland | EnvironmentType.Mountain | EnvironmentType.Border;
         foreach (var settlement in workingBoard.Values)
         {

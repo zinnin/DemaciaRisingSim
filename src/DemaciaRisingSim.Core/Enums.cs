@@ -33,4 +33,5 @@ public enum EnvironmentType
     Border = 2,
     Mountain = 4,
     Petricite = 8,
+    Woodland = 16,
 }
