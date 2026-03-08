@@ -34,4 +34,11 @@ public class SimulationSettings
     /// Maximum building level the optimizer is allowed to try (1–4). Default: 4.
     /// </summary>
     public int MaxBuildingLevel { get; set; } = 4;
+
+    /// <summary>
+    /// Minimum food units each settlement should produce. Farms are placed in the
+    /// lowest-value slots of each settlement to satisfy this target before the remaining
+    /// slots are filled with production structures. Default: 2.
+    /// </summary>
+    public int FoodTargetPerSettlement { get; set; } = 2;
 }

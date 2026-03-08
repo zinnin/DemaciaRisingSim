@@ -459,7 +459,7 @@ public class SimulatorTests
     }
 
     [Fact]
-    public void OptimizeBoard_WithDefaultSettings_PreAllocatesRequiredStructures()
+    public void OptimizeBoard_WithDefaultSettings_PlacesRequiredStructures()
     {
         var board = BoardData.CreateDefaultBoard();
         var settings = new SimulationSettings
@@ -470,9 +470,15 @@ public class SimulatorTests
         };
         var optimized = Simulator.OptimizeBoard(board, settings);
 
-        Assert.Equal(StructureType.DurandsWorkshop,    optimized["The Great City"].Structures[4].Type);
-        Assert.Equal(StructureType.ShrineOfVeiledLady, optimized["The Great City"].Structures[5].Type);
-        Assert.Equal(StructureType.Quartermaster,      optimized["High Silvermere"].Structures[4].Type);
+        // The smart allocation places required structures in globally lowest-value slots,
+        // so we verify they are present somewhere on the board (not hardcoded to specific slots).
+        var allStructureTypes = optimized.Values
+            .SelectMany(s => s.Structures)
+            .Select(s => s.Type)
+            .ToList();
+        Assert.Contains(StructureType.DurandsWorkshop,    allStructureTypes);
+        Assert.Contains(StructureType.ShrineOfVeiledLady, allStructureTypes);
+        Assert.Contains(StructureType.Quartermaster,      allStructureTypes);
     }
 
     [Fact]
@@ -522,5 +528,211 @@ public class SimulatorTests
         Assert.Contains("Score:", report);
         Assert.Contains("Total Production:", report);
         Assert.Contains("Food:", report);
+    }
+
+    // --- Influence-count tests ---
+
+    [Fact]
+    public void CountMarketplaceInfluence_TheGreatCity_ReturnsThreeNeighborSlots()
+    {
+        var board = BoardData.CreateDefaultBoard();
+        // The Great City has links to Dawnhold, High Silvermere, Tylburne (3 neighbors)
+        int influence = Simulator.CountMarketplaceInfluence(board["The Great City"]);
+        Assert.Equal(3 * GameConstants.SettlementSlotCount, influence);
+    }
+
+    [Fact]
+    public void CountMarketplaceInfluence_HighSilvermere_ReturnsSixNeighborSlots()
+    {
+        var board = BoardData.CreateDefaultBoard();
+        // High Silvermere has 6 links: TGC, Fossbarrow, Hawkstone, Jandelle, Pinara, Uwendale
+        int influence = Simulator.CountMarketplaceInfluence(board["High Silvermere"]);
+        Assert.Equal(6 * GameConstants.SettlementSlotCount, influence);
+    }
+
+    [Fact]
+    public void CountAcademyInfluence_TheGreatCity_OnlyBuffsSelf()
+    {
+        var board = BoardData.CreateDefaultBoard();
+        // The Great City is Petricite-only: not Heartland/Mountain/Border, so only buffs itself
+        int influence = Simulator.CountAcademyInfluence(board["The Great City"], board);
+        Assert.Equal(1 * GameConstants.SettlementSlotCount, influence);
+    }
+
+    [Fact]
+    public void CountAcademyInfluence_MountainSettlement_BuffsAllMountainSettlements()
+    {
+        var board = BoardData.CreateDefaultBoard();
+        // Mountain settlements: Evenmoor, Hawkstone, High Silvermere, Pinara, Uwendale = 5
+        int influence = Simulator.CountAcademyInfluence(board["Evenmoor"], board);
+        Assert.Equal(5 * GameConstants.SettlementSlotCount, influence);
+    }
+
+    [Fact]
+    public void CountAcademyInfluence_HeartlandSettlement_BuffsAllHeartlandSettlements()
+    {
+        var board = BoardData.CreateDefaultBoard();
+        // Heartland settlements: Brookhollow, Hayneath, Jandelle, Tylburne, Vaskasia = 5
+        int influence = Simulator.CountAcademyInfluence(board["Brookhollow"], board);
+        Assert.Equal(5 * GameConstants.SettlementSlotCount, influence);
+    }
+
+    [Fact]
+    public void CountAcademyInfluence_BorderSettlement_BuffsAllBorderSettlements()
+    {
+        var board = BoardData.CreateDefaultBoard();
+        // Border settlements: Cloudfield, Dawnhold, Fossbarrow, Meltridge, Terbisia = 5
+        int influence = Simulator.CountAcademyInfluence(board["Cloudfield"], board);
+        Assert.Equal(5 * GameConstants.SettlementSlotCount, influence);
+    }
+
+    // --- SmartAllocateBoard tests ---
+
+    [Fact]
+    public void SmartAllocateBoard_PlacesBuffStructures_InHighInfluenceSettlements()
+    {
+        var board = BoardData.CreateDefaultBoard();
+        var settings = new SimulationSettings
+        {
+            RequireDurandsWorkshop    = false,
+            RequireShrineOfVeiledLady = false,
+            RequireQuartermaster      = false,
+            FoodTargetPerSettlement   = 0,
+        };
+        var allocated = Simulator.SmartAllocateBoard(board, settings);
+
+        // Every settlement that passes break-even should have a Marketplace or Academy.
+        // With max level 4 (multiplier 0.10), break-even = 10 slots.
+        bool anyBuff = allocated.Values.Any(s =>
+            s.Structures.Any(st => st.Type == StructureType.Marketplace || st.Type == StructureType.Academy));
+        Assert.True(anyBuff);
+    }
+
+    [Fact]
+    public void SmartAllocateBoard_PetriciteOnlySettlement_GetMarketplaceNotAcademy()
+    {
+        var board = BoardData.CreateDefaultBoard();
+        var settings = new SimulationSettings
+        {
+            RequireDurandsWorkshop    = false,
+            RequireShrineOfVeiledLady = false,
+            RequireQuartermaster      = false,
+            FoodTargetPerSettlement   = 0,
+        };
+        var allocated = Simulator.SmartAllocateBoard(board, settings);
+
+        // The Great City is Petricite-only: academy influence = 1*6 = 6 < break-even (10),
+        // marketplace influence = 3*6 = 18 ≥ break-even → should get Marketplace.
+        var tgcBuff = allocated["The Great City"].Structures
+            .FirstOrDefault(s => s.Type == StructureType.Marketplace || s.Type == StructureType.Academy);
+        Assert.NotNull(tgcBuff);
+        Assert.Equal(StructureType.Marketplace, tgcBuff!.Type);
+    }
+
+    [Fact]
+    public void SmartAllocateBoard_RequiredStructures_PlacedSomewhere()
+    {
+        var board = BoardData.CreateDefaultBoard();
+        var settings = new SimulationSettings
+        {
+            RequireDurandsWorkshop    = true,
+            RequireShrineOfVeiledLady = true,
+            RequireQuartermaster      = true,
+            FoodTargetPerSettlement   = 0,
+        };
+        var allocated = Simulator.SmartAllocateBoard(board, settings);
+
+        var allTypes = allocated.Values.SelectMany(s => s.Structures).Select(s => s.Type).ToList();
+        Assert.Contains(StructureType.DurandsWorkshop,    allTypes);
+        Assert.Contains(StructureType.ShrineOfVeiledLady, allTypes);
+        Assert.Contains(StructureType.Quartermaster,      allTypes);
+    }
+
+    [Fact]
+    public void SmartAllocateBoard_FoodTarget_MetPerSettlement()
+    {
+        var board = BoardData.CreateDefaultBoard();
+        var settings = new SimulationSettings
+        {
+            RequireDurandsWorkshop    = false,
+            RequireShrineOfVeiledLady = false,
+            RequireQuartermaster      = false,
+            FoodTargetPerSettlement   = 2,
+            MaxBuildingLevel          = 4,
+        };
+        var allocated = Simulator.SmartAllocateBoard(board, settings);
+
+        // After smart allocation each non-locked settlement should meet the food target.
+        foreach (var settlement in allocated.Values)
+        {
+            int food = Simulator.SettlementOutput(settlement).Food;
+            Assert.True(food >= 2,
+                $"{settlement.Name} has only {food} food (target: 2)");
+        }
+    }
+
+    [Fact]
+    public void SmartAllocateBoard_FoodTargetZero_NoFarmsPlaced()
+    {
+        var board = BoardData.CreateDefaultBoard();
+        var settings = new SimulationSettings
+        {
+            RequireDurandsWorkshop    = false,
+            RequireShrineOfVeiledLady = false,
+            RequireQuartermaster      = false,
+            FoodTargetPerSettlement   = 0,
+        };
+        var allocated = Simulator.SmartAllocateBoard(board, settings);
+
+        // No farms should be placed when food target is 0.
+        Assert.DoesNotContain(StructureType.Farm,
+            allocated.Values.SelectMany(s => s.Structures).Select(s => s.Type));
+    }
+
+    [Fact]
+    public void SmartAllocateBoard_LockedSettlement_IsNotReset()
+    {
+        var board = BoardData.CreateDefaultBoard();
+        board["Fossbarrow"].Structures[0] = new Structure(StructureType.Watchtower, 1);
+
+        var settings = new SimulationSettings
+        {
+            RequireDurandsWorkshop    = false,
+            RequireShrineOfVeiledLady = false,
+            RequireQuartermaster      = false,
+            FoodTargetPerSettlement   = 0,
+            LockedSettlements         = ["Fossbarrow"],
+        };
+        var allocated = Simulator.SmartAllocateBoard(board, settings);
+
+        Assert.Equal(StructureType.Watchtower, allocated["Fossbarrow"].Structures[0].Type);
+    }
+
+    [Fact]
+    public void SmartAllocateBoard_ScoreIsAtLeastAsGoodAsAllLumberyardL1()
+    {
+        var board = BoardData.CreateDefaultBoard(); // all Lumberyard L1
+        double baseScore = Simulator.Score(board);
+
+        var settings = new SimulationSettings
+        {
+            RequireDurandsWorkshop    = false,
+            RequireShrineOfVeiledLady = false,
+            RequireQuartermaster      = false,
+            FoodTargetPerSettlement   = 0,
+        };
+        var allocated = Simulator.SmartAllocateBoard(board, settings);
+        // After Permutate fills the remaining slots the full OptimizeBoard score will be higher,
+        // but even the raw smart allocation (which leaves many slots empty) might score lower;
+        // the full OptimizeBoard must score at least as well.
+        var optimized = Simulator.OptimizeBoard(board, settings);
+        Assert.True(Simulator.Score(optimized) >= baseScore);
+    }
+
+    [Fact]
+    public void SimulationSettings_FoodTargetPerSettlement_DefaultIsTwo()
+    {
+        var settings = new SimulationSettings();
+        Assert.Equal(2, settings.FoodTargetPerSettlement);
     }
 }

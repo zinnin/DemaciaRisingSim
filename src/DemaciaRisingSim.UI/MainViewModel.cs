@@ -81,6 +81,7 @@ public class MainViewModel : INotifyPropertyChanged
     private bool _requireShrineOfVeiledLady = true;
     private bool _requireQuartermaster = true;
     private int _maxBuildingLevel = 4;
+    private int _foodTargetPerSettlement = 2;
 
     private Dictionary<string, Settlement> _board;
 
@@ -158,6 +159,12 @@ public class MainViewModel : INotifyPropertyChanged
         set { _maxBuildingLevel = value; OnPropertyChanged(); }
     }
 
+    public int FoodTargetPerSettlement
+    {
+        get => _foodTargetPerSettlement;
+        set { _foodTargetPerSettlement = Math.Max(0, value); OnPropertyChanged(); }
+    }
+
     public MainViewModel()
     {
         _board = BoardData.CreateDefaultBoard();
@@ -185,6 +192,7 @@ public class MainViewModel : INotifyPropertyChanged
                 RequireShrineOfVeiledLady = RequireShrineOfVeiledLady,
                 RequireQuartermaster    = RequireQuartermaster,
                 MaxBuildingLevel        = MaxBuildingLevel,
+                FoodTargetPerSettlement = FoodTargetPerSettlement,
             };
             var boardToOptimize = BoardData.Clone(_board);
             var optimized = await Task.Run(() => Simulator.OptimizeBoard(boardToOptimize, settings));
