@@ -398,7 +398,10 @@ public static class Simulator
         }
 
         // --- Step 7: Meet the global food target using the fewest possible farm slots ---
-        // FoodTargetPerSettlement × eligible-settlement-count gives the total food goal.
+        // FoodTargetPerSettlement × all-settlement-count gives the total food goal.
+        // The capital is included in the settlement count even though it cannot build farms —
+        // the kingdom's food need covers every settlement, and non-capital settlements must
+        // compensate for the capital's share.
         // Farm L4 (maxLevel) is used everywhere so each slot provides the most food possible.
         //
         // At each step the algorithm picks the slot whose cost-per-food-unit is lowest:
@@ -410,18 +413,20 @@ public static class Simulator
         // farms across multiple Heartland settlements rather than stacking them all in one.
         // This reduces the total number of farm slots consumed and frees more slots for the
         // production structures that drive the turn count.
-        // The capital is exempt: its slots are reserved for PetriciteMills.
+        // The capital is exempt from placing farms: its slots are reserved for PetriciteMills.
         if (settings.FoodTargetPerSettlement > 0)
         {
             // Farm structures go up to level 4 (unlike buff structures which cap at 3).
             int maxFarmLevel = Math.Min(4, maxLevel);
 
-            // Determine eligible settlements (non-capital, non-locked).
+            // Determine eligible settlements (non-capital, non-locked) — farms go here.
             var eligibleSettlements = work.Values
                 .Where(s => !settings.LockedSettlements.Contains(s.Name) && !s.AllowsPetriciteMill)
                 .ToList();
 
-            int totalFoodTarget = settings.FoodTargetPerSettlement * eligibleSettlements.Count;
+            // The food goal spans ALL settlements (including capital) because every settlement
+            // in the kingdom consumes food, even if only non-capital ones can produce it.
+            int totalFoodTarget = settings.FoodTargetPerSettlement * work.Count;
 
             // Current food already present across all eligible settlements.
             int currentFood = eligibleSettlements.Sum(s => SettlementOutput(s).Food);

@@ -36,9 +36,12 @@ public class SimulationSettings
     public int MaxBuildingLevel { get; set; } = 4;
 
     /// <summary>
-    /// Minimum food units each settlement should produce. Farms are placed in the
-    /// lowest-value slots of each settlement to satisfy this target before the remaining
-    /// slots are filled with production structures. Default: 2.
+    /// Minimum food units the kingdom should produce per turn, expressed as a per-settlement
+    /// rate.  The optimizer computes a total food goal of
+    /// <c>FoodTargetPerSettlement × totalSettlements</c> (including the capital, which
+    /// contributes to the kingdom's food need but cannot build farms itself).  Farms are
+    /// placed in the lowest-value slots of non-capital settlements to reach that total before
+    /// the remaining slots are filled with production structures.  Default: 2.
     /// </summary>
     public int FoodTargetPerSettlement { get; set; } = 2;
 
