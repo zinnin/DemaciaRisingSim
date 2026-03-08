@@ -409,10 +409,43 @@ public class SimulatorTests
     [Fact]
     public void Score_ZeroProduction_ReturnsZero()
     {
-        // When any targeted resource has zero production, the board is unreachable → score 0.
+        // Only Lumber has a target and Lumber production is 0 → covered=0/total=1 → score 0.
         var settings = new SimulationSettings { LumberTarget = 100, StoneTarget = 0, MetalTarget = 0, PetriciteTarget = 0 };
         var output = new ResourceOutput(0, 100, 50, 3);
         Assert.Equal(0, Simulator.Score(output, settings));
+    }
+
+    [Fact]
+    public void Score_PartialProduction_IsBetweenZeroAndOne()
+    {
+        // 2 of 4 targeted resources have production → coverage score = 0.5.
+        var settings = new SimulationSettings
+        {
+            LumberTarget    = 1000,
+            StoneTarget     = 1000,
+            MetalTarget     = 1000,
+            PetriciteTarget = 1000,
+        };
+        var output = new ResourceOutput(Lumber: 10, Stone: 10, Metal: 0, Petricite: 0);
+        double score = Simulator.Score(output, settings);
+        Assert.True(score > 0 && score < 1, $"Expected partial score in (0,1), got {score}");
+        Assert.Equal(0.5, score, precision: 10);
+    }
+
+    [Fact]
+    public void Score_PartialProduction_IsLowerThanFullProduction()
+    {
+        // Partial coverage (some resources at 0) must score below a fully-producing board.
+        var settings = new SimulationSettings
+        {
+            LumberTarget    = 1000,
+            StoneTarget     = 1000,
+            MetalTarget     = 1000,
+            PetriciteTarget = 1000,
+        };
+        var partial = new ResourceOutput(Lumber: 10, Stone: 0, Metal: 0, Petricite: 0);
+        var full    = new ResourceOutput(Lumber:  1, Stone: 1, Metal: 1, Petricite: 1);
+        Assert.True(Simulator.Score(full, settings) > Simulator.Score(partial, settings));
     }
 
     [Fact]
@@ -921,5 +954,30 @@ public class SimulatorTests
         Assert.Equal(0,  turns.Metal);
         Assert.Equal(0,  turns.Petricite);
         Assert.Equal(50, turns.Max);
+    }
+
+    [Fact]
+    public void OptimizeBoard_NoEmptyProductionSlots()
+    {
+        // After a full optimization run, no unlocked settlement should have an Empty slot
+        // that is not accounted for — the new Score gradient must drive Permutate to fill
+        // every slot with a production structure.
+        var board = BoardData.CreateDefaultBoard();
+        var settings = new SimulationSettings
+        {
+            RequireDurandsWorkshop    = true,
+            RequireShrineOfVeiledLady = true,
+            RequireQuartermaster      = true,
+            FoodTargetPerSettlement   = 2,
+            MaxBuildingLevel          = 4,
+        };
+        var optimized = Simulator.OptimizeBoard(board, settings);
+
+        foreach (var settlement in optimized.Values)
+        {
+            int emptyCount = settlement.Structures.Count(s => s.Type == StructureType.Empty);
+            Assert.True(emptyCount == 0,
+                $"{settlement.Name} still has {emptyCount} empty slot(s) after optimization.");
+        }
     }
 }

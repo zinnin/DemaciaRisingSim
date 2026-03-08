@@ -149,17 +149,52 @@ public static class Simulator
 
     /// <summary>
     /// Generates a single numeric score for a board's resource output given the provided
-    /// resource targets. Higher is better. The score is the reciprocal of the maximum turns
-    /// needed to hit any target (i.e., fewer turns = higher score).
-    /// Returns 0 when any targeted resource has zero production.
+    /// resource targets. Higher is better.
+    /// <para>
+    /// Scoring uses two phases so that <see cref="Permutate"/> can make incremental progress
+    /// from any board state, including the sparse board produced by <see cref="SmartAllocateBoard"/>:
+    /// </para>
+    /// <list type="bullet">
+    ///   <item><b>Phase 1 — coverage</b> (any targeted resource has zero production):
+    ///     returns <c>covered / total</c> in <c>[0, 1)</c>, where <c>covered</c> is the number
+    ///     of targeted resources that have at least 1 unit of production.  This provides a
+    ///     gradient that rewards adding a new resource type even when others are still missing.</item>
+    ///   <item><b>Phase 2 — efficiency</b> (all targeted resources have non-zero production):
+    ///     returns <c>1 + 1 / sumOfTurns</c>, where <c>sumOfTurns</c> is the sum of the
+    ///     per-resource turns values.  This is always <c>&gt; 1</c> (always above any Phase-1
+    ///     score) and rewards <em>any</em> production improvement, not just improvements to
+    ///     the current bottleneck.  Because the bottleneck resource dominates the sum,
+    ///     the optimizer naturally converges to minimising the maximum turns.</item>
+    /// </list>
     /// Food is not included in the score.
     /// </summary>
     public static double Score(ResourceOutput output, SimulationSettings? settings = null)
     {
-        int maxTurns = TurnsToComplete(output, settings).Max;
-        if (maxTurns == int.MaxValue) return 0.0;  // unreachable resource
-        if (maxTurns == 0)            return 1e10;  // all targets already met — best possible score
-        return 1.0 / maxTurns;
+        settings ??= new SimulationSettings();
+        var turns    = TurnsToComplete(output, settings);
+        int maxTurns = turns.Max;
+
+        // All targets already met (or all targets are 0).
+        if (maxTurns == 0) return 1e10;
+
+        // Phase 1: at least one targeted resource has zero production.
+        // Return a fractional coverage score in [0, 1) to guide the optimizer toward
+        // filling all resource types before worrying about quantities.
+        if (maxTurns == int.MaxValue)
+        {
+            int covered = 0, total = 0;
+            if (settings.LumberTarget    > 0) { total++; if (output.Lumber    > 0) covered++; }
+            if (settings.StoneTarget     > 0) { total++; if (output.Stone     > 0) covered++; }
+            if (settings.MetalTarget     > 0) { total++; if (output.Metal     > 0) covered++; }
+            if (settings.PetriciteTarget > 0) { total++; if (output.Petricite > 0) covered++; }
+            return total > 0 ? (double)covered / total : 0.0;
+        }
+
+        // Phase 2: all resources producing — reward any production improvement.
+        // Using 1/sumOfTurns gives a gradient for EVERY slot, not just the bottleneck,
+        // so Permutate fills all slots while still converging toward the minimum max turns.
+        long sumTurns = (long)turns.Lumber + turns.Stone + turns.Metal + turns.Petricite;
+        return 1.0 + 1.0 / sumTurns;
     }
 
     /// <summary>Scores a board configuration directly.</summary>
