@@ -33,28 +33,24 @@ public class SimulatorTests
     }
 
     [Fact]
-    public void StructureData_PetriciteMill_IsNotCapitalOnly()
+    public void StructureData_PetriciteMill_IsCapitalOnly()
     {
-        // PetriciteMill is now Petricite-terrain restricted, not capital-only.
+        // PetriciteMill can only be placed in the capital (multiple are allowed).
         for (int level = 1; level <= 3; level++)
-            Assert.False(StructureData.Get(StructureType.PetriciteMill, level).CapitalOnly);
+            Assert.True(StructureData.Get(StructureType.PetriciteMill, level).CapitalOnly);
     }
 
     [Fact]
-    public void Settlement_AllowsPetriciteMill_PetriciteTerrain()
+    public void Settlement_AllowsPetriciteMill_CapitalOnly()
     {
-        // All Petricite-terrain settlements (capital and non-capital) may build PetriciteMills.
+        // Only the capital may build PetriciteMills, regardless of terrain.
         var capital      = new Settlement("Cap",      EnvironmentType.Petricite, isCapital: true);
-        var dawnhold     = new Settlement("Dawnhold", EnvironmentType.Petricite | EnvironmentType.Border);
-        var highSilv     = new Settlement("HighSilv", EnvironmentType.Petricite | EnvironmentType.Mountain);
-        var tylburne     = new Settlement("Tylburne", EnvironmentType.Petricite | EnvironmentType.Heartland);
-        var nonPetricite = new Settlement("Other",    EnvironmentType.Heartland);
+        var petricite    = new Settlement("Dawnhold", EnvironmentType.Petricite | EnvironmentType.Border);
+        var nonCapital   = new Settlement("Other",    EnvironmentType.Heartland);
 
-        Assert.True(capital.AllowsPetriciteMill,      "Capital with Petricite should allow PetriciteMill");
-        Assert.True(dawnhold.AllowsPetriciteMill,     "Dawnhold (Petricite+Border) should allow PetriciteMill");
-        Assert.True(highSilv.AllowsPetriciteMill,     "High Silvermere (Petricite+Mountain) should allow PetriciteMill");
-        Assert.True(tylburne.AllowsPetriciteMill,     "Tylburne (Petricite+Heartland) should allow PetriciteMill");
-        Assert.False(nonPetricite.AllowsPetriciteMill,"Non-Petricite settlement should not allow PetriciteMill");
+        Assert.True(capital.AllowsPetriciteMill,    "Capital should allow PetriciteMill");
+        Assert.False(petricite.AllowsPetriciteMill,  "Non-capital Petricite settlement should not allow PetriciteMill");
+        Assert.False(nonCapital.AllowsPetriciteMill, "Non-capital settlement should not allow PetriciteMill");
     }
 
     [Fact]
@@ -1000,10 +996,11 @@ public class SimulatorTests
     }
 
     [Fact]
-    public void OptimizeBoard_PetriciteTerrain_GetsPetriciteMills()
+    public void OptimizeBoard_Capital_GetsMultiplePetriciteMills()
     {
-        // Dawnhold, High Silvermere, and Tylburne have Petricite terrain and should
-        // receive PetriciteMills when petricite production is the binding bottleneck.
+        // The Great City is the only settlement that can build PetriciteMills, and multiple
+        // are allowed. When petricite is the binding bottleneck, the optimizer should fill
+        // the capital's available slots with more than one PetriciteMill.
         var board = BoardData.CreateDefaultBoard();
         var settings = new SimulationSettings
         {
@@ -1015,13 +1012,9 @@ public class SimulatorTests
         };
         var optimized = Simulator.OptimizeBoard(board, settings);
 
-        var petriciteSettlements = new[] { "Dawnhold", "High Silvermere", "Tylburne" };
-        foreach (var name in petriciteSettlements)
-        {
-            var settlement = optimized[name];
-            int millCount = settlement.Structures.Count(s => s.Type == StructureType.PetriciteMill);
-            Assert.True(millCount > 0,
-                $"{name} (Petricite terrain) should have at least one PetriciteMill after optimization.");
-        }
+        var capital = optimized["The Great City"];
+        int millCount = capital.Structures.Count(s => s.Type == StructureType.PetriciteMill);
+        Assert.True(millCount > 1,
+            $"The Great City should have more than one PetriciteMill after optimization (got {millCount}).");
     }
 }

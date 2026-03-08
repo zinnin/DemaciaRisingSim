@@ -44,9 +44,9 @@ public class Settlement
 
     /// <summary>
     /// Returns true if a Petricite Mill may be placed in this settlement.
-    /// Petricite Mills can be built in any settlement with Petricite terrain.
+    /// Petricite Mills can only be constructed in the capital, but multiple may be built.
     /// </summary>
-    public bool AllowsPetriciteMill => Environment.HasFlag(EnvironmentType.Petricite);
+    public bool AllowsPetriciteMill => IsCapital;
 
     /// <summary>Creates a deep copy of this settlement.</summary>
     public Settlement Clone()

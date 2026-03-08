@@ -590,7 +590,7 @@ public static class Simulator
         if (settlement.Environment.HasFlag(EnvironmentType.Border) && !hasPriorForge)
             metalVal *= 2.0;
 
-        // PetriciteMill value: available in Petricite terrain settlements
+        // PetriciteMill value: available only in the capital settlement
         double petriciteVal = 0;
         if (settlement.AllowsPetriciteMill)
         {
