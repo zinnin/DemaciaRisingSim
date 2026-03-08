@@ -225,6 +225,7 @@ public static class Simulator
 
         var work     = BoardData.Clone(board);
         int maxLevel = settings.MaxBuildingLevel;
+        // Buff structures (Academy/Marketplace) max at level 3; clamp accordingly.
         int buffLevel = Math.Min(3, maxLevel);
 
         // Reset non-locked settlements to empty.
@@ -313,6 +314,7 @@ public static class Simulator
         // --- Step 7: Meet the per-settlement food target using lowest-value remaining slots ---
         if (settings.FoodTargetPerSettlement > 0)
         {
+            // Farm structures go up to level 4 (unlike buff structures which cap at 3).
             int farmLevel = Math.Min(4, maxLevel);
             foreach (var s in work.Values)
             {
