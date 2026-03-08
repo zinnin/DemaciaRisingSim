@@ -389,43 +389,57 @@ public static class Simulator
             usedSlotSet.Add((name, slot));
         }
 
-        // --- Step 7: Meet the per-settlement food target using lowest-value remaining slots ---
-        // The capital is exempt: its slots are more valuable as PetriciteMills than as farms.
+        // --- Step 7: Meet the global food target using the fewest possible farm slots ---
+        // FoodTargetPerSettlement × eligible-settlement-count gives the total food goal.
+        // Farm L4 (maxLevel) is used everywhere so each slot provides the most food possible
+        // (5 food in a normal settlement, 6 in Heartland on the first two farms).
+        // Farms are placed in the globally cheapest available slots first and stop as soon
+        // as the total food across all eligible settlements reaches the target.  This ensures
+        // no more farm slots are consumed than necessary, leaving surplus slots for the
+        // production structures that actually drive the turn count.
+        // The capital is exempt: its slots are reserved for PetriciteMills.
         if (settings.FoodTargetPerSettlement > 0)
         {
             // Farm structures go up to level 4 (unlike buff structures which cap at 3).
             int maxFarmLevel = Math.Min(4, maxLevel);
-            foreach (var s in work.Values)
+
+            // Determine eligible settlements (non-capital, non-locked).
+            var eligibleSettlements = work.Values
+                .Where(s => !settings.LockedSettlements.Contains(s.Name) && !s.AllowsPetriciteMill)
+                .ToList();
+
+            int totalFoodTarget = settings.FoodTargetPerSettlement * eligibleSettlements.Count;
+
+            // Current food already present across all eligible settlements.
+            int currentFood = eligibleSettlements.Sum(s => SettlementOutput(s).Food);
+
+            if (currentFood < totalFoodTarget)
             {
-                if (settings.LockedSettlements.Contains(s.Name)) continue;
-
-                // Skip the capital — its slots are reserved for PetriciteMills.
-                if (s.AllowsPetriciteMill) continue;
-
-                int foodNeeded = settings.FoodTargetPerSettlement - SettlementOutput(s).Food;
-                if (foodNeeded <= 0) continue;
-
-                // This settlement's empty slots, still sorted by value ascending.
-                var settlSlots = sortedByValue
-                    .Where(sv => sv.Name == s.Name && !usedSlotSet.Contains((sv.Name, sv.Slot)))
+                // Cheapest slots globally across all eligible settlements.
+                var globalFarmSlots = sortedByValue
+                    .Where(sv =>
+                    {
+                        if (!work.TryGetValue(sv.Name, out var s)) return false;
+                        if (settings.LockedSettlements.Contains(s.Name)) return false;
+                        if (s.AllowsPetriciteMill) return false;
+                        return !usedSlotSet.Contains((sv.Name, sv.Slot));
+                    })
                     .ToList();
 
-                foreach (var (name, slot, _) in settlSlots)
+                foreach (var (name, slot, _) in globalFarmSlots)
                 {
-                    if (foodNeeded <= 0) break;
+                    if (currentFood >= totalFoodTarget) break;
 
-                    // Always use the maximum farm level so that each farm slot provides the
-                    // most food possible.  This minimises the total number of farm slots needed
-                    // to meet any food target.  In Heartland settlements the +1 bonus on the
-                    // first two farms means the target is satisfied in fewer slots than in
-                    // non-Heartland settlements — Farm L4 in a Heartland settlement gives
-                    // 5 + 1 = 6 food, covering a target of ≤6 in a single slot.
+                    var s = work[name];
+                    // Capture food before placement so the Heartland bonus on subsequent
+                    // farms in the same settlement is computed correctly via SettlementOutput.
+                    int foodBefore = SettlementOutput(s).Food;
                     s.Structures[slot] = new Structure(StructureType.Farm, maxFarmLevel);
+                    // SettlementOutput re-evaluates the settlement (6 structure slots) so the
+                    // Heartland +1 bonus on the first two farms is always counted accurately.
+                    currentFood += SettlementOutput(s).Food - foodBefore;
                     fixedSlots.Add((name, slot));
                     usedSlotSet.Add((name, slot));
-
-                    // Recompute food after each farm placement (accounts for Heartland bonuses).
-                    foodNeeded = settings.FoodTargetPerSettlement - SettlementOutput(s).Food;
                 }
             }
         }

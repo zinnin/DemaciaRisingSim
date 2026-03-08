@@ -763,15 +763,15 @@ public class SimulatorTests
         };
         var allocated = Simulator.SmartAllocateBoard(board, settings);
 
-        // After smart allocation each non-capital settlement should meet the food target.
-        // The capital is exempt: its slots are reserved for PetriciteMills.
-        foreach (var settlement in allocated.Values)
-        {
-            if (settlement.AllowsPetriciteMill) continue;
-            int food = Simulator.SettlementOutput(settlement).Food;
-            Assert.True(food >= 2,
-                $"{settlement.Name} has only {food} food (target: 2)");
-        }
+        // The total food across all eligible (non-capital) settlements should meet the global
+        // food goal (FoodTargetPerSettlement × eligible count).  Individual settlements may
+        // have 0 food — farms are placed in the cheapest global slots first so that fewer
+        // farm slots are consumed overall.
+        var eligible = allocated.Values.Where(s => !s.AllowsPetriciteMill).ToList();
+        int totalFood   = eligible.Sum(s => Simulator.SettlementOutput(s).Food);
+        int totalTarget = settings.FoodTargetPerSettlement * eligible.Count;
+        Assert.True(totalFood >= totalTarget,
+            $"Total food {totalFood} is below global target {totalTarget}");
     }
 
     [Fact]
@@ -842,13 +842,9 @@ public class SimulatorTests
     [Fact]
     public void SmartAllocateBoard_FoodTarget_PerSettlementFoodMatchesTarget()
     {
-        // Each non-capital settlement should produce at least FoodTargetPerSettlement food.
-        // Farm slots always use the maximum level so each slot provides the most food possible.
-        // For FoodTarget=2, a single Farm L4 per settlement is placed — it overshoots the
-        // target (L4 gives 5, or 6 in Heartland) but this is intentional: the overshoot
-        // frees subsequent slots from needing any further farm coverage while maximising
-        // food output for army sustainment.
-        // The capital is exempt from the food target and should have 0 food from SmartAllocate.
+        // The global food total should be at least FoodTargetPerSettlement × eligible count.
+        // With Farm L4 (5 food/slot, 6 in Heartland), far fewer than one farm per settlement
+        // is needed.  The capital is exempt from the food target.
         var board = BoardData.CreateDefaultBoard();
         var settings = new SimulationSettings
         {
@@ -860,30 +856,27 @@ public class SimulatorTests
         };
         var allocated = Simulator.SmartAllocateBoard(board, settings);
 
-        foreach (var settlement in allocated.Values)
-        {
-            int food = Simulator.SettlementOutput(settlement).Food;
-            if (settlement.AllowsPetriciteMill)
-            {
-                // Capital is exempt from food target — its slots are reserved for PetriciteMills.
-                Assert.Equal(0, food);
-            }
-            else
-            {
-                // Every non-capital settlement must produce at least the food target.
-                // Max-level farms overshoot, which is acceptable and by design.
-                Assert.True(food >= settings.FoodTargetPerSettlement,
-                    $"{settlement.Name} has {food} food but target is {settings.FoodTargetPerSettlement}");
-            }
-        }
+        // Capital should have 0 food (its slots are reserved for PetriciteMills).
+        foreach (var settlement in allocated.Values.Where(s => s.AllowsPetriciteMill))
+            Assert.Equal(0, Simulator.SettlementOutput(settlement).Food);
+
+        // Total food across eligible settlements must reach the global target.
+        var eligible    = allocated.Values.Where(s => !s.AllowsPetriciteMill).ToList();
+        int totalFood   = eligible.Sum(s => Simulator.SettlementOutput(s).Food);
+        int totalTarget = settings.FoodTargetPerSettlement * eligible.Count;
+        Assert.True(totalFood >= totalTarget,
+            $"Total food {totalFood} is below global target {totalTarget}");
     }
 
     [Fact]
     public void SmartAllocateBoard_FarmPlacement_UsesMaxLevelFarms()
     {
         // Farm slots should always use the maximum building level so each slot provides the
-        // most food possible.  For FoodTarget=2 this means every non-capital settlement
-        // gets exactly one Farm L4 regardless of environment (Heartland or not).
+        // most food possible.  The global-total approach also means fewer farms than
+        // settlements are needed for FoodTarget=2: the board has 15 eligible (non-capital)
+        // settlements, giving a total food target of 30.  Farm L4 gives 5 food per slot
+        // (6 in Heartland on the first two farms), so the target can be reached in far
+        // fewer than 15 farm slots, leaving the remaining slots for production structures.
         var board = BoardData.CreateDefaultBoard();
         var settings = new SimulationSettings
         {
@@ -895,20 +888,19 @@ public class SimulatorTests
         };
         var allocated = Simulator.SmartAllocateBoard(board, settings);
 
-        foreach (var settlement in allocated.Values)
-        {
-            if (settlement.AllowsPetriciteMill) continue; // capital exempt
+        var eligibleSettlements = allocated.Values.Where(s => !s.AllowsPetriciteMill).ToList();
+        var allFarms = eligibleSettlements
+            .SelectMany(s => s.Structures.Where(st => st.Type == StructureType.Farm))
+            .ToList();
 
-            var farms = settlement.Structures.Where(s => s.Type == StructureType.Farm).ToList();
-            Assert.True(farms.Count <= 1,
-                $"{settlement.Name} has {farms.Count} farms; expected at most 1 for FoodTarget=2");
+        // Every placed farm must be at the maximum building level.
+        foreach (var farm in allFarms)
+            Assert.Equal(settings.MaxBuildingLevel, farm.Level);
 
-            if (farms.Count == 1)
-            {
-                // All farms should be at the maximum building level.
-                Assert.Equal(settings.MaxBuildingLevel, farms[0].Level);
-            }
-        }
+        // The total number of farms should be less than the number of eligible settlements,
+        // confirming that not every settlement has a farm (global target was hit early).
+        Assert.True(allFarms.Count < eligibleSettlements.Count,
+            $"Expected fewer farms ({allFarms.Count}) than eligible settlements ({eligibleSettlements.Count})");
     }
 
     [Fact]
