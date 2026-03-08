@@ -1187,8 +1187,8 @@ public class SimulatorTests
     [Fact]
     public void OptimizeBoard_DefaultSettings_MaxTurnsFewerThanSixtySeven()
     {
-        // The combination of cost-per-food-unit farm distribution (Step 7) and Phase 2
-        // buff-slot unlocking should push the optimized board below 67 max turns.
+        // Cost-per-food-unit farm distribution (Step 7), Phase 2 buff-slot unlocking, and
+        // Phase 3 food top-up together should push the optimized board below 67 max turns.
         var board     = BoardData.CreateDefaultBoard();
         var settings  = new SimulationSettings(); // all defaults
         var optimized = Simulator.OptimizeBoard(board, settings);
@@ -1196,6 +1196,22 @@ public class SimulatorTests
         var turns = Simulator.TurnsToComplete(Simulator.BoardOutput(optimized), settings);
         Assert.True(turns.Max < 67,
             $"Expected max turns < 67 after full optimization, but got {turns.Max}.");
+    }
+
+    [Fact]
+    public void OptimizeBoard_DefaultSettings_FoodHitsKingdomTarget()
+    {
+        // Phase 3 ensures total food reaches FoodTargetPerSettlement × totalSettlements
+        // (including the capital, which needs food but cannot build farms).
+        // With 16 settlements and FoodTargetPerSettlement = 2, the kingdom food target is 32.
+        var board     = BoardData.CreateDefaultBoard();
+        var settings  = new SimulationSettings(); // all defaults
+        var optimized = Simulator.OptimizeBoard(board, settings);
+
+        int kingdomFoodTarget = settings.FoodTargetPerSettlement * optimized.Count;
+        int actualFood        = Simulator.BoardOutput(optimized).Food;
+        Assert.True(actualFood >= kingdomFoodTarget,
+            $"Expected food ≥ {kingdomFoodTarget} (Phase 3 kingdom-wide target) but got {actualFood}.");
     }
 
     [Fact]
