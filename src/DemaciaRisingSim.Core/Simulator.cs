@@ -73,6 +73,35 @@ public static class Simulator
     }
 
     /// <summary>
+    /// Returns the total number of structure slots that would receive a production buff
+    /// if a Marketplace were placed in the given settlement.
+    /// A Marketplace buffs all neighboring settlements' slots.
+    /// </summary>
+    public static int CountMarketplaceInfluence(Settlement settlement) =>
+        settlement.Neighbors.Count * GameConstants.SettlementSlotCount;
+
+    /// <summary>
+    /// Returns the total number of structure slots that would receive a production buff
+    /// if an Academy were placed in the given settlement (including the settlement itself).
+    /// An Academy buffs all settlements sharing the same primary environment
+    /// (Heartland, Mountain, or Border). Petricite/Woodland-only settlements buff only themselves.
+    /// </summary>
+    public static int CountAcademyInfluence(Settlement settlement, Dictionary<string, Settlement> board)
+    {
+        const EnvironmentType PrimaryMask = EnvironmentType.Heartland | EnvironmentType.Mountain | EnvironmentType.Border;
+        var sourcePrimary = settlement.Environment & PrimaryMask;
+        int count = 0;
+        foreach (var target in board.Values)
+        {
+            bool isSelf    = target.Name == settlement.Name;
+            bool sharesEnv = sourcePrimary != EnvironmentType.None &&
+                             (target.Environment & sourcePrimary) != EnvironmentType.None;
+            if (isSelf || sharesEnv) count++;
+        }
+        return count * GameConstants.SettlementSlotCount;
+    }
+
+    /// <summary>
     /// Calculates total resource production for the entire board,
     /// applying all Marketplace and Academy multiplier effects first.
     /// </summary>
@@ -80,42 +109,7 @@ public static class Simulator
     {
         // Work on a copy so we don't mutate the caller's board.
         var workingBoard = BoardData.Clone(board);
-
-        // Reset all multipliers to base.
-        foreach (var settlement in workingBoard.Values)
-            settlement.Multiplier = 1.0;
-
-        // Apply Marketplace and Academy multipliers (level-aware).
-        // Academy buff targets are derived from shared primary environment (Heartland / Mountain / Border).
-        // Petricite and Woodland are not primary environments for academy grouping; settlements with only
-        // those environments (e.g. The Great City) only buff themselves.
-        const EnvironmentType PrimaryMask = EnvironmentType.Heartland | EnvironmentType.Mountain | EnvironmentType.Border;
-        foreach (var settlement in workingBoard.Values)
-        {
-            foreach (var structure in settlement.Structures)
-            {
-                if (structure.Type == StructureType.Marketplace)
-                {
-                    var def = StructureData.Get(structure.Type, structure.Level);
-                    foreach (var neighborId in settlement.Neighbors)
-                        if (workingBoard.TryGetValue(neighborId, out var neighbor))
-                            neighbor.Multiplier += def.MarketplaceMultiplier;
-                }
-                else if (structure.Type == StructureType.Academy)
-                {
-                    var def = StructureData.Get(structure.Type, structure.Level);
-                    var sourcePrimary = settlement.Environment & PrimaryMask;
-                    foreach (var target in workingBoard.Values)
-                    {
-                        bool isSelf      = target.Name == settlement.Name;
-                        bool sharesEnv   = sourcePrimary != EnvironmentType.None &&
-                                           (target.Environment & sourcePrimary) != EnvironmentType.None;
-                        if (isSelf || sharesEnv)
-                            target.Multiplier += def.AcademyMultiplier;
-                    }
-                }
-            }
-        }
+        ApplyMultipliers(workingBoard);
 
         // Sum up settlement outputs.
         var total = ResourceOutput.Zero;
@@ -205,10 +199,164 @@ public static class Simulator
     }
 
     /// <summary>
-    /// Iteratively calls Permutate until no further improvement is found, up to a
+    /// Allocates structures to the board using an influence-driven approach:
+    /// <list type="number">
+    ///   <item>Places Marketplace or Academy in the settlement where it buffs the most other slots,
+    ///         choosing Marketplace when it influences more slots than Academy (or vice-versa),
+    ///         and only placing a buff structure where the influenced-slot count exceeds the
+    ///         break-even threshold (1 / multiplier_at_max_level).</item>
+    ///   <item>Places required structures (Durand's Workshop, Shrine, Quartermaster) in the
+    ///         globally lowest-value remaining slots.</item>
+    ///   <item>Meets the per-settlement food target by placing Farms in each settlement's
+    ///         lowest-value remaining slots.</item>
+    ///   <item>Leaves all other slots empty for further optimization via <see cref="Permutate"/>.</item>
+    /// </list>
+    /// </summary>
+    /// <param name="board">Source board (not mutated).</param>
+    /// <param name="settings">Optimizer settings.</param>
+    /// <param name="fixedSlots">Output: the set of slots that must not be changed during subsequent optimization passes.</param>
+    public static Dictionary<string, Settlement> SmartAllocateBoard(
+        Dictionary<string, Settlement> board,
+        SimulationSettings? settings,
+        out HashSet<(string, int)> fixedSlots)
+    {
+        settings   ??= new SimulationSettings();
+        fixedSlots   = [];
+
+        var work     = BoardData.Clone(board);
+        int maxLevel = settings.MaxBuildingLevel;
+        // Buff structures (Academy/Marketplace) max at level 3; clamp accordingly.
+        int buffLevel = Math.Min(3, maxLevel);
+
+        // Reset non-locked settlements to empty.
+        foreach (var s in work.Values)
+            if (!settings.LockedSettlements.Contains(s.Name))
+                Array.Fill(s.Structures, Structure.Empty);
+
+        // --- Step 1: Calculate influence counts for each settlement ---
+        var mpInfluence   = work.Values.ToDictionary(s => s.Name, s => CountMarketplaceInfluence(s));
+        var acadInfluence = work.Values.ToDictionary(s => s.Name, s => CountAcademyInfluence(s, work));
+
+        // --- Step 2: Compute break-even threshold ---
+        // A buff structure uses one slot. It pays off when:
+        //   multiplier × influenced_slots × avg_slot_value ≥ avg_slot_value
+        // → influenced_slots ≥ 1 / multiplier
+        double buffMult  = StructureData.Get(StructureType.Academy, buffLevel).AcademyMultiplier;
+        double breakEven = 1.0 / buffMult;
+
+        // --- Step 3: Place one buff structure in each settlement where the influence exceeds break-even ---
+        // Prefer Marketplace if it buffs more slots; otherwise Academy.
+        // "If a settlement doesn't have many connecting nodes, Marketplace is not very valuable,
+        //  but potentially Academy is."
+        foreach (var s in work.Values.OrderByDescending(s => Math.Max(mpInfluence[s.Name], acadInfluence[s.Name])))
+        {
+            if (settings.LockedSettlements.Contains(s.Name)) continue;
+
+            int mpInf   = mpInfluence[s.Name];
+            int acadInf = acadInfluence[s.Name];
+
+            if (mpInf < breakEven && acadInf < breakEven) continue;
+
+            StructureType buffType = (mpInf >= acadInf && mpInf >= breakEven)
+                ? StructureType.Marketplace
+                : StructureType.Academy;
+
+            // Place in the first empty slot.
+            for (int i = 0; i < s.Structures.Length; i++)
+            {
+                if (s.Structures[i].Type == StructureType.Empty)
+                {
+                    s.Structures[i] = new Structure(buffType, buffLevel);
+                    fixedSlots.Add((s.Name, i));
+                    break;
+                }
+            }
+        }
+
+        // --- Step 4: Apply multipliers from the placed buff structures ---
+        ApplyMultipliers(work);
+
+        // --- Step 5: Rank all remaining empty slots by production opportunity cost (ascending) ---
+        // Opportunity cost = value of the best production structure that could go in that slot,
+        // scaled by the settlement's current multiplier.
+        var allSlots = new List<(string Name, int Slot, double Value)>();
+        foreach (var s in work.Values)
+        {
+            if (settings.LockedSettlements.Contains(s.Name)) continue;
+            for (int i = 0; i < s.Structures.Length; i++)
+            {
+                if (s.Structures[i].Type == StructureType.Empty)
+                    allSlots.Add((s.Name, i, ComputeSlotValue(s, i, maxLevel)));
+            }
+        }
+        var sortedByValue = allSlots.OrderBy(x => x.Value).ToList();
+        var usedSlotSet   = new HashSet<(string, int)>(fixedSlots);
+
+        // --- Step 6: Place required structures in the globally lowest-value slots ---
+        var required = new List<Structure>();
+        if (settings.RequireDurandsWorkshop)     required.Add(new Structure(StructureType.DurandsWorkshop,    1));
+        if (settings.RequireShrineOfVeiledLady)  required.Add(new Structure(StructureType.ShrineOfVeiledLady, 1));
+        if (settings.RequireQuartermaster)        required.Add(new Structure(StructureType.Quartermaster,       1));
+
+        int reqIdx = 0;
+        foreach (var req in required)
+        {
+            while (reqIdx < sortedByValue.Count && usedSlotSet.Contains((sortedByValue[reqIdx].Name, sortedByValue[reqIdx].Slot)))
+                reqIdx++;
+            if (reqIdx >= sortedByValue.Count) break;
+
+            var (name, slot, _) = sortedByValue[reqIdx++];
+            work[name].Structures[slot] = req;
+            fixedSlots.Add((name, slot));
+            usedSlotSet.Add((name, slot));
+        }
+
+        // --- Step 7: Meet the per-settlement food target using lowest-value remaining slots ---
+        if (settings.FoodTargetPerSettlement > 0)
+        {
+            // Farm structures go up to level 4 (unlike buff structures which cap at 3).
+            int farmLevel = Math.Min(4, maxLevel);
+            foreach (var s in work.Values)
+            {
+                if (settings.LockedSettlements.Contains(s.Name)) continue;
+
+                int foodNeeded = settings.FoodTargetPerSettlement - SettlementOutput(s).Food;
+                if (foodNeeded <= 0) continue;
+
+                // This settlement's empty slots, still sorted by value ascending.
+                var settlSlots = sortedByValue
+                    .Where(sv => sv.Name == s.Name && !usedSlotSet.Contains((sv.Name, sv.Slot)))
+                    .ToList();
+
+                foreach (var (name, slot, _) in settlSlots)
+                {
+                    if (foodNeeded <= 0) break;
+
+                    s.Structures[slot] = new Structure(StructureType.Farm, farmLevel);
+                    fixedSlots.Add((name, slot));
+                    usedSlotSet.Add((name, slot));
+
+                    // Recompute food after each farm placement (accounts for Heartland bonuses).
+                    foodNeeded = settings.FoodTargetPerSettlement - SettlementOutput(s).Food;
+                }
+            }
+        }
+
+        return work;
+    }
+
+    /// <summary>
+    /// Calls <see cref="SmartAllocateBoard(Dictionary{string,Settlement},SimulationSettings?,out HashSet{ValueTuple{string,int}})"/>
+    /// and discards the fixed-slots output. Convenient for callers that only need the board.
+    /// </summary>
+    public static Dictionary<string, Settlement> SmartAllocateBoard(
+        Dictionary<string, Settlement> board,
+        SimulationSettings? settings = null) => SmartAllocateBoard(board, settings, out _);
+
+    /// <summary>
+    /// Uses <see cref="SmartAllocateBoard"/> to create an informed starting layout, then
+    /// iteratively calls <see cref="Permutate"/> until no further improvement is found, up to a
     /// maximum of <see cref="GameConstants.MaxOptimizationIterations"/> iterations.
-    /// Required structures from <paramref name="settings"/> are pre-allocated before
-    /// the first pass and are not changed during optimization.
     /// </summary>
     public static Dictionary<string, Settlement> OptimizeBoard(
         Dictionary<string, Settlement> board,
@@ -216,9 +364,7 @@ public static class Simulator
     {
         settings ??= new SimulationSettings();
 
-        var prepared   = BoardData.Clone(board);
-        var fixedSlots = PreAllocateRequired(prepared, settings);
-
+        var prepared   = SmartAllocateBoard(board, settings, out var fixedSlots);
         var solution   = Permutate(prepared, settings, fixedSlots);
         int iterations = GameConstants.MaxOptimizationIterations;
 
@@ -282,42 +428,80 @@ public static class Simulator
     // -------------------------------------------------------------------------
 
     /// <summary>
-    /// Pre-places required structures and returns the set of slots that must not
-    /// be changed during optimization.
+    /// Resets all settlement multipliers to 1.0 then applies every Marketplace and
+    /// Academy structure on the board. Mutates the provided board in place.
+    /// Academy buff targets are derived from shared primary environment (Heartland / Mountain / Border).
+    /// Petricite and Woodland are not primary environments for academy grouping; settlements with only
+    /// those environments (e.g. The Great City) only buff themselves.
     /// </summary>
-    private static HashSet<(string, int)> PreAllocateRequired(
-        Dictionary<string, Settlement> board,
-        SimulationSettings settings)
+    private static void ApplyMultipliers(Dictionary<string, Settlement> board)
     {
-        var fixedSlots = new HashSet<(string, int)>();
+        const EnvironmentType PrimaryMask = EnvironmentType.Heartland | EnvironmentType.Mountain | EnvironmentType.Border;
 
-        // Slots 4 and 5 in The Great City are reserved for required non-production structures
-        const int CapitalSlotA = 4;
-        const int CapitalSlotB = 5;
-        const int QuartermasterSlot = 4;
+        foreach (var settlement in board.Values)
+            settlement.Multiplier = 1.0;
 
-        if ((settings.RequireDurandsWorkshop || settings.RequireShrineOfVeiledLady) &&
-            board.TryGetValue("The Great City", out var tgc))
+        foreach (var settlement in board.Values)
         {
-            if (settings.RequireDurandsWorkshop)
+            foreach (var structure in settlement.Structures)
             {
-                tgc.Structures[CapitalSlotA] = new Structure(StructureType.DurandsWorkshop, 1);
-                fixedSlots.Add(("The Great City", CapitalSlotA));
-            }
-            if (settings.RequireShrineOfVeiledLady)
-            {
-                tgc.Structures[CapitalSlotB] = new Structure(StructureType.ShrineOfVeiledLady, 1);
-                fixedSlots.Add(("The Great City", CapitalSlotB));
+                if (structure.Type == StructureType.Marketplace)
+                {
+                    var def = StructureData.Get(structure.Type, structure.Level);
+                    foreach (var neighborId in settlement.Neighbors)
+                        if (board.TryGetValue(neighborId, out var neighbor))
+                            neighbor.Multiplier += def.MarketplaceMultiplier;
+                }
+                else if (structure.Type == StructureType.Academy)
+                {
+                    var def = StructureData.Get(structure.Type, structure.Level);
+                    var sourcePrimary = settlement.Environment & PrimaryMask;
+                    foreach (var target in board.Values)
+                    {
+                        bool isSelf    = target.Name == settlement.Name;
+                        bool sharesEnv = sourcePrimary != EnvironmentType.None &&
+                                         (target.Environment & sourcePrimary) != EnvironmentType.None;
+                        if (isSelf || sharesEnv)
+                            target.Multiplier += def.AcademyMultiplier;
+                    }
+                }
             }
         }
+    }
 
-        if (settings.RequireQuartermaster && board.TryGetValue("High Silvermere", out var hs))
-        {
-            hs.Structures[QuartermasterSlot] = new Structure(StructureType.Quartermaster, 1);
-            fixedSlots.Add(("High Silvermere", QuartermasterSlot));
-        }
+    /// <summary>
+    /// Estimates the production opportunity cost for a slot: the normalized output value
+    /// of the best production structure that could be placed in this slot, accounting for
+    /// terrain bonuses already claimed by earlier slots and the settlement's multiplier.
+    /// </summary>
+    private static double ComputeSlotValue(Settlement settlement, int slotIndex, int maxLevel)
+    {
+        int effectiveLevel = Math.Max(1, Math.Min(4, maxLevel));
 
-        return fixedSlots;
+        // Lumberyard value (always available everywhere)
+        double lumberVal = (double)StructureData.Get(StructureType.Lumberyard, effectiveLevel).LumberOutput
+                           / GameConstants.LumberTileValue;
+        if (settlement.Environment.HasFlag(EnvironmentType.Woodland))
+            lumberVal *= 1.25;
+
+        // Quarry value: first Quarry in a Mountain settlement earns the terrain double
+        bool hasPriorQuarry = settlement.Environment.HasFlag(EnvironmentType.Mountain) &&
+                              settlement.Structures.Take(slotIndex).Any(s => s.Type == StructureType.Quarry);
+        double stoneVal = (double)StructureData.Get(StructureType.Quarry, effectiveLevel).StoneOutput
+                          / GameConstants.StoneTileValue;
+        if (settlement.Environment.HasFlag(EnvironmentType.Mountain) && !hasPriorQuarry)
+            stoneVal *= 2.0;
+
+        // Forge value: first Forge in a Border settlement earns the terrain double
+        bool hasPriorForge = settlement.Environment.HasFlag(EnvironmentType.Border) &&
+                             settlement.Structures.Take(slotIndex).Any(s => s.Type == StructureType.Forge);
+        double metalVal = (double)StructureData.Get(StructureType.Forge, effectiveLevel).MetalOutput
+                          / GameConstants.MetalTileValue;
+        if (settlement.Environment.HasFlag(EnvironmentType.Border) && !hasPriorForge)
+            metalVal *= 2.0;
+
+        double best = Math.Max(lumberVal, Math.Max(stoneVal, metalVal));
+        return best * settlement.Multiplier;
     }
 
     /// <summary>
