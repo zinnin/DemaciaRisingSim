@@ -499,24 +499,18 @@ public class SimulatorTests
             MetalTarget     = 143_650,
             PetriciteTarget =   1_450,
         };
-        // Board A: max=80 (stone), sum=80+83+75+56=294 (lumber went up a bit, stone dropped)
-        // Produce exactly the right amounts to land on the desired turns:
-        // turns = ceil(target / production), so production = ceil(target / turns)
-        // stone   80 turns: 343400/80 = 4292.5 → need 4293 production  (ceil(343400/80)=4293)
-        // lumber  75 turns: 296300/75 = 3950.7 → need 3951
-        // metal   83 turns: 143650/83 = 1730.7 → need 1731
-        // Petricite 56: 1450/56 = 25.9 → need 26
+        // Board A: max=80 (stone), lower than Board B.
+        // stone   80 turns: ceil(343400/4293) = 80  ✓
+        // lumber  75 turns: ceil(296300/3951) = 75  ✓
+        // metal   83 turns: ceil(143650/1731) = 83  ✓
+        // petricite 56 turns: ceil(1450/26)   = 56  ✓
         var boardA = new ResourceOutput(Lumber: 3951, Stone: 4293, Metal: 1731, Petricite: 26);
 
-        // Board B: max=88 (stone), sum=88+83+50+45 (lumber+Petricite drop more but max unchanged)
-        // stone  88 turns: 343400/88 = 3902.3 → need 3903
-        // lumber 50 turns: 296300/50 = 5926   → need 5926
-        // metal  83 turns: 143650/83 = 1730.7 → need 1731
-        // Petricite 45: 1450/45 = 32.2 → need 33 (45 turns: ceil(1450/33)=44 < 45, try 32: ceil(1450/32)=46)
-        // Actually use turns directly: just create outputs that give exact turn values
-        // stone: 3903/turn → ceil(343400/3903)=88, lumber: 5927/turn → ceil(296300/5927)=50
-        // metal: 1731/turn → ceil(143650/1731)=83, Petricite: 33/turn → ceil(1450/33)=44
-        // Let's just use simple values that unambiguously land on the desired turns:
+        // Board B: max=88 (stone), higher than Board A, but lower total turns.
+        // stone  88 turns: ceil(343400/3903) = 88  ✓
+        // lumber 50 turns: ceil(296300/5927) = 50  ✓
+        // metal  83 turns: ceil(143650/1731) = 83  ✓
+        // petricite 44 turns: ceil(1450/33)  = 44  ✓
         var boardB = new ResourceOutput(Lumber: 5927, Stone: 3903, Metal: 1731, Petricite: 33);
 
         var turnsA = Simulator.TurnsToComplete(boardA, settings);
@@ -848,10 +842,11 @@ public class SimulatorTests
     [Fact]
     public void SmartAllocateBoard_FoodTarget_PerSettlementFoodMatchesTarget()
     {
-        // Each non-capital settlement should receive no more than FoodTargetPerSettlement food
-        // (plus at most 1 from an unavoidable Heartland terrain bonus rounding).
-        // Previously, max-level (L4) farms were always placed even when L1/L2 sufficed,
-        // causing 5+ food per settlement instead of the target 2.
+        // Each non-capital settlement should receive exactly FoodTargetPerSettlement food.
+        // The Heartland +1 bonus on the first two farms is accounted for in farm level
+        // selection: Heartland settlements receive Farm L1 (1 base + 1 bonus = 2 food),
+        // while non-Heartland settlements receive Farm L2 (2 base = 2 food).
+        // There is no overshoot because the minimum sufficient level is chosen.
         // The capital is exempt from the food target and should have 0 food from SmartAllocate.
         var board = BoardData.CreateDefaultBoard();
         var settings = new SimulationSettings
@@ -874,11 +869,44 @@ public class SimulatorTests
             }
             else
             {
-                Assert.True(food >= 2,
-                    $"{settlement.Name} has only {food} food (target: 2)");
-                // Food must not exceed the target by more than 1 (one unavoidable Heartland rounding unit).
-                Assert.True(food <= 3,
-                    $"{settlement.Name} has {food} food, which overshoots the target of 2");
+                // Every non-capital settlement must produce exactly the food target — no more,
+                // no less.  The heartland bonus allows Farm L1 to satisfy a target of 2 in
+                // Heartland settlements; Farm L2 is used in non-Heartland settlements.
+                Assert.Equal(settings.FoodTargetPerSettlement, food);
+            }
+        }
+    }
+
+    [Fact]
+    public void SmartAllocateBoard_HeartlandFarmBonus_UsesFarmL1NotFarmL2()
+    {
+        // The Heartland +1 food bonus on the first two farms means a Farm L1 (1 base + 1 bonus = 2)
+        // already satisfies a FoodTarget of 2.  A Farm L2 (2 base + 1 bonus = 3) would overshoot
+        // and waste a slot-level upgrade.  SmartAllocate must use Farm L1 in Heartland
+        // settlements and Farm L2 in non-Heartland settlements.
+        var board = BoardData.CreateDefaultBoard();
+        var settings = new SimulationSettings
+        {
+            RequireDurandsWorkshop    = false,
+            RequireShrineOfVeiledLady = false,
+            RequireQuartermaster      = false,
+            FoodTargetPerSettlement   = 2,
+            MaxBuildingLevel          = 4,
+        };
+        var allocated = Simulator.SmartAllocateBoard(board, settings);
+
+        foreach (var settlement in allocated.Values)
+        {
+            if (settlement.AllowsPetriciteMill) continue; // capital exempt
+
+            var farms = settlement.Structures.Where(s => s.Type == StructureType.Farm).ToList();
+            Assert.True(farms.Count <= 1,
+                $"{settlement.Name} has {farms.Count} farms; expected at most 1 for FoodTarget=2");
+
+            if (farms.Count == 1)
+            {
+                int expectedLevel = settlement.Environment.HasFlag(EnvironmentType.Heartland) ? 1 : 2;
+                Assert.Equal(expectedLevel, farms[0].Level);
             }
         }
     }

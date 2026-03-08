@@ -166,7 +166,7 @@ public static class Simulator
     ///     the total improves.  The <c>0.01/sumOfTurns</c> secondary term is a tiebreaker that
     ///     provides a gradient when two arrangements share the same maximum, steering the
     ///     optimizer toward overall balance rather than over-producing non-bottleneck resources.
-    ///     The weight 0.01 is provably small enough (ε &lt; 1) that it never overrides the primary
+    ///     The weight 0.01 is provably small enough (ε < 1) that it never overrides the primary
     ///     term: the benefit of reducing maxTurns by 1 always exceeds the benefit of reducing
     ///     sumOfTurns by 1.</item>
     /// </list>
