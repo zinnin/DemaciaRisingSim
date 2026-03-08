@@ -5,27 +5,14 @@ namespace DemaciaRisingSim.Core.Tests;
 public class GameConstantsTests
 {
     [Fact]
-    public void NormalizationValues_MatchMaxLevelStructureOutputs()
+    public void StructureData_MaxLevelOutputs_MatchExpectedValues()
     {
-        // Normalization constants should equal the max-level output of each structure type
-        Assert.Equal(150, GameConstants.LumberTileValue);   // Lumberyard L4
-        Assert.Equal(100, GameConstants.StoneTileValue);    // Quarry L4
-        Assert.Equal(50,  GameConstants.MetalTileValue);    // Forge L4
-        Assert.Equal(3,   GameConstants.PetriciteTileValue);// PetriciteMill L3
-
-        // Verify against StructureData definitions
-        Assert.Equal(GameConstants.LumberTileValue,    StructureData.Get(StructureType.Lumberyard,    4).LumberOutput);
-        Assert.Equal(GameConstants.StoneTileValue,     StructureData.Get(StructureType.Quarry,        4).StoneOutput);
-        Assert.Equal(GameConstants.MetalTileValue,     StructureData.Get(StructureType.Forge,         4).MetalOutput);
-        Assert.Equal(GameConstants.PetriciteTileValue, StructureData.Get(StructureType.PetriciteMill, 3).PetriciteOutput);
-    }
-
-    [Fact]
-    public void ResourceRatios_AreCorrect()
-    {
-        Assert.Equal(1.25, GameConstants.StoneRatio);
-        Assert.Equal(1.5,  GameConstants.MetalRatio);
-        Assert.Equal(0.3,  GameConstants.PetriciteRatio);
+        // These values are the normalization basis used internally by ComputeSlotValue.
+        // Verifying them here ensures StructureData hasn't been accidentally changed.
+        Assert.Equal(150, StructureData.Get(StructureType.Lumberyard,    4).LumberOutput);    // L4
+        Assert.Equal(100, StructureData.Get(StructureType.Quarry,        4).StoneOutput);     // L4
+        Assert.Equal(50,  StructureData.Get(StructureType.Forge,         4).MetalOutput);     // L4
+        Assert.Equal(3,   StructureData.Get(StructureType.PetriciteMill, 3).PetriciteOutput); // L3 (max)
     }
 
     [Fact]

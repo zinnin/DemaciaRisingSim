@@ -120,33 +120,51 @@ public static class Simulator
     }
 
     /// <summary>
-    /// Generates a single numeric score for a board's resource output.
-    /// Higher is better. Rewards balanced production matching the ideal ratios.
+    /// Returns the number of turns needed to accumulate <paramref name="target"/> of a resource
+    /// given <paramref name="production"/> per turn.
+    /// Returns 0 when the target is 0 (already met), and <see cref="int.MaxValue"/> when
+    /// production is 0 but the target is non-zero (unreachable).
+    /// </summary>
+    private static int TurnsForResource(int production, int target)
+    {
+        if (target <= 0)       return 0;
+        if (production <= 0)   return int.MaxValue;
+        return (target + production - 1) / production;
+    }
+
+    /// <summary>
+    /// Calculates the number of turns required to accumulate each resource target given the
+    /// board's per-turn output. A value of <see cref="int.MaxValue"/> indicates zero production
+    /// for a resource that has a non-zero target.
+    /// </summary>
+    public static TurnsBreakdown TurnsToComplete(ResourceOutput output, SimulationSettings? settings = null)
+    {
+        settings ??= new SimulationSettings();
+        return new TurnsBreakdown(
+            Lumber:    TurnsForResource(output.Lumber,    settings.LumberTarget),
+            Stone:     TurnsForResource(output.Stone,     settings.StoneTarget),
+            Metal:     TurnsForResource(output.Metal,     settings.MetalTarget),
+            Petricite: TurnsForResource(output.Petricite, settings.PetriciteTarget));
+    }
+
+    /// <summary>
+    /// Generates a single numeric score for a board's resource output given the provided
+    /// resource targets. Higher is better. The score is the reciprocal of the maximum turns
+    /// needed to hit any target (i.e., fewer turns = higher score).
+    /// Returns 0 when any targeted resource has zero production.
     /// Food is not included in the score.
     /// </summary>
-    public static double Score(ResourceOutput output)
+    public static double Score(ResourceOutput output, SimulationSettings? settings = null)
     {
-        if (output.Lumber == 0) return 0;
-
-        double realLumber    = (double)output.Lumber    / GameConstants.LumberTileValue;
-        double realStone     = (double)output.Stone     / GameConstants.StoneTileValue;
-        double realMetal     = (double)output.Metal     / GameConstants.MetalTileValue;
-        double realPetricite = (double)output.Petricite / GameConstants.PetriciteTileValue;
-
-        double stoneRelative     = realStone     / realLumber;
-        double metalRelative     = realMetal     / realLumber;
-        double petriciteRelative = realPetricite / realLumber;
-
-        double ratioPenalty = Math.Exp(-1.0 * (
-            Math.Pow((Math.Abs(stoneRelative     - GameConstants.StoneRatio)     / GameConstants.StoneRatio),     2) +
-            Math.Pow((Math.Abs(metalRelative     - GameConstants.MetalRatio)     / GameConstants.MetalRatio),     2) +
-            Math.Pow((Math.Abs(petriciteRelative - GameConstants.PetriciteRatio) / GameConstants.PetriciteRatio), 2)));
-
-        return (realLumber + realStone + realMetal + realPetricite) * ratioPenalty;
+        int maxTurns = TurnsToComplete(output, settings).Max;
+        if (maxTurns == int.MaxValue) return 0.0;  // unreachable resource
+        if (maxTurns == 0)            return 1e10;  // all targets already met — best possible score
+        return 1.0 / maxTurns;
     }
 
     /// <summary>Scores a board configuration directly.</summary>
-    public static double Score(Dictionary<string, Settlement> board) => Score(BoardOutput(board));
+    public static double Score(Dictionary<string, Settlement> board, SimulationSettings? settings = null)
+        => Score(BoardOutput(board), settings);
 
     /// <summary>
     /// Performs one pass over every optimizable slot on the board, trying each valid
@@ -161,7 +179,7 @@ public static class Simulator
         fixedSlots ??= [];
 
         var current   = BoardData.Clone(board);
-        double highScore = Score(current);
+        double highScore = Score(current, settings);
 
         foreach (var settlementName in current.Keys.ToList())
         {
@@ -195,7 +213,7 @@ public static class Simulator
                         continue;
 
                     settlement.Structures[slotIndex] = candidate;
-                    double candidateScore = Score(current);
+                    double candidateScore = Score(current, settings);
                     if (candidateScore > highScore)
                     {
                         highScore = candidateScore;
@@ -412,11 +430,14 @@ public static class Simulator
     }
 
     /// <summary>
-    /// Generates a formatted summary of a board's structure layout and production output.
+    /// Generates a formatted summary of a board's structure layout, per-turn production output,
+    /// and the number of turns required to accumulate each resource target.
     /// </summary>
-    public static string FullReport(Dictionary<string, Settlement> board)
+    public static string FullReport(Dictionary<string, Settlement> board, SimulationSettings? settings = null)
     {
+        settings ??= new SimulationSettings();
         var output = BoardOutput(board);
+        var turns  = TurnsToComplete(output, settings);
         var sb = new System.Text.StringBuilder();
 
         sb.AppendLine("Board Layout:");
@@ -427,32 +448,17 @@ public static class Simulator
         }
 
         sb.AppendLine();
-        sb.AppendLine($"Total Production: {output}");
+        sb.AppendLine($"Total Production (per turn): {output}");
+
         sb.AppendLine();
-
-        double realLumber    = (double)output.Lumber    / GameConstants.LumberTileValue;
-        double realStone     = (double)output.Stone     / GameConstants.StoneTileValue;
-        double realMetal     = (double)output.Metal     / GameConstants.MetalTileValue;
-        double realPetricite = (double)output.Petricite / GameConstants.PetriciteTileValue;
-
-        sb.AppendLine("Adjusted Output (in structure-equivalents):");
-        sb.AppendLine($"  Lumber:    {realLumber:F4}");
-        sb.AppendLine($"  Stone:     {realStone:F4}");
-        sb.AppendLine($"  Metal:     {realMetal:F4}");
-        sb.AppendLine($"  Petricite: {realPetricite:F4}");
+        sb.AppendLine("Turns to hit targets:");
+        sb.AppendLine($"  Lumber:    {TurnsBreakdown.Format(turns.Lumber),6}  (target: {settings.LumberTarget})");
+        sb.AppendLine($"  Stone:     {TurnsBreakdown.Format(turns.Stone),6}  (target: {settings.StoneTarget})");
+        sb.AppendLine($"  Metal:     {TurnsBreakdown.Format(turns.Metal),6}  (target: {settings.MetalTarget})");
+        sb.AppendLine($"  Petricite: {TurnsBreakdown.Format(turns.Petricite),6}  (target: {settings.PetriciteTarget})");
         sb.AppendLine($"  Food:      {output.Food}");
-
-        if (realLumber > 0)
-        {
-            sb.AppendLine();
-            sb.AppendLine("Ratios (relative to lumber):");
-            sb.AppendLine($"  Stone:     {realStone / realLumber:F4} (target: {GameConstants.StoneRatio})");
-            sb.AppendLine($"  Metal:     {realMetal / realLumber:F4} (target: {GameConstants.MetalRatio})");
-            sb.AppendLine($"  Petricite: {realPetricite / realLumber:F4} (target: {GameConstants.PetriciteRatio})");
-        }
-
         sb.AppendLine();
-        sb.AppendLine($"Score: {Score(output):F6}");
+        sb.AppendLine($"Max Turns: {TurnsBreakdown.Format(turns.Max)}");
 
         return sb.ToString();
     }
@@ -515,14 +521,21 @@ public static class Simulator
     /// Estimates the production opportunity cost for a slot: the normalized output value
     /// of the best production structure that could be placed in this slot, accounting for
     /// terrain bonuses already claimed by earlier slots and the settlement's multiplier.
+    /// Normalization uses the maximum level-4 output for each resource type, derived from
+    /// <see cref="StructureData"/>.
     /// </summary>
     private static double ComputeSlotValue(Settlement settlement, int slotIndex, int maxLevel)
     {
         int effectiveLevel = Math.Max(1, Math.Min(4, maxLevel));
 
+        // Normalize by max level-4 output so all resources are on the same 0–1 scale.
+        int maxLumberOutput    = StructureData.Get(StructureType.Lumberyard,    4).LumberOutput;
+        int maxStoneOutput     = StructureData.Get(StructureType.Quarry,        4).StoneOutput;
+        int maxMetalOutput     = StructureData.Get(StructureType.Forge,         4).MetalOutput;
+
         // Lumberyard value (always available everywhere)
         double lumberVal = (double)StructureData.Get(StructureType.Lumberyard, effectiveLevel).LumberOutput
-                           / GameConstants.LumberTileValue;
+                           / maxLumberOutput;
         if (settlement.Environment.HasFlag(EnvironmentType.Woodland))
             lumberVal *= 1.25;
 
@@ -530,7 +543,7 @@ public static class Simulator
         bool hasPriorQuarry = settlement.Environment.HasFlag(EnvironmentType.Mountain) &&
                               settlement.Structures.Take(slotIndex).Any(s => s.Type == StructureType.Quarry);
         double stoneVal = (double)StructureData.Get(StructureType.Quarry, effectiveLevel).StoneOutput
-                          / GameConstants.StoneTileValue;
+                          / maxStoneOutput;
         if (settlement.Environment.HasFlag(EnvironmentType.Mountain) && !hasPriorQuarry)
             stoneVal *= 2.0;
 
@@ -538,7 +551,7 @@ public static class Simulator
         bool hasPriorForge = settlement.Environment.HasFlag(EnvironmentType.Border) &&
                              settlement.Structures.Take(slotIndex).Any(s => s.Type == StructureType.Forge);
         double metalVal = (double)StructureData.Get(StructureType.Forge, effectiveLevel).MetalOutput
-                          / GameConstants.MetalTileValue;
+                          / maxMetalOutput;
         if (settlement.Environment.HasFlag(EnvironmentType.Border) && !hasPriorForge)
             metalVal *= 2.0;
 

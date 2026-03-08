@@ -407,27 +407,31 @@ public class SimulatorTests
     }
 
     [Fact]
-    public void Score_ZeroLumber_ReturnsZero()
+    public void Score_ZeroProduction_ReturnsZero()
     {
+        // When any targeted resource has zero production, the board is unreachable → score 0.
+        var settings = new SimulationSettings { LumberTarget = 100, StoneTarget = 0, MetalTarget = 0, PetriciteTarget = 0 };
         var output = new ResourceOutput(0, 100, 50, 3);
-        Assert.Equal(0, Simulator.Score(output));
+        Assert.Equal(0, Simulator.Score(output, settings));
     }
 
     [Fact]
-    public void Score_PerfectRatios_IsHigherThanImbalanced()
+    public void Score_FewerMaxTurns_IsHigher()
     {
-        double lumberUnits = 10;
-        var balanced = new ResourceOutput(
-            Lumber:    (int)(lumberUnits * GameConstants.LumberTileValue),
-            Stone:     (int)(lumberUnits * GameConstants.StoneRatio     * GameConstants.StoneTileValue),
-            Metal:     (int)(lumberUnits * GameConstants.MetalRatio     * GameConstants.MetalTileValue),
-            Petricite: (int)(lumberUnits * GameConstants.PetriciteRatio * GameConstants.PetriciteTileValue));
+        // A board that hits all targets in fewer turns should score higher.
+        var settings = new SimulationSettings
+        {
+            LumberTarget    = 1000,
+            StoneTarget     = 1000,
+            MetalTarget     = 1000,
+            PetriciteTarget = 1000,
+        };
+        // 10 of each per turn → 100 max turns
+        var faster = new ResourceOutput(10, 10, 10, 10);
+        // 5 of each per turn → 200 max turns
+        var slower = new ResourceOutput(5,  5,  5,  5);
 
-        var allLumber = new ResourceOutput(
-            Lumber:    (int)(lumberUnits * 4 * GameConstants.LumberTileValue),
-            Stone: 0, Metal: 0, Petricite: 0);
-
-        Assert.True(Simulator.Score(balanced) > Simulator.Score(allLumber));
+        Assert.True(Simulator.Score(faster, settings) > Simulator.Score(slower, settings));
     }
 
     [Fact]
@@ -521,13 +525,14 @@ public class SimulatorTests
     }
 
     [Fact]
-    public void FullReport_ContainsScoreAndProductionLines()
+    public void FullReport_ContainsTurnsAndProductionLines()
     {
         var board = BoardData.CreateDefaultBoard();
         string report = Simulator.FullReport(board);
-        Assert.Contains("Score:", report);
-        Assert.Contains("Total Production:", report);
+        Assert.Contains("Max Turns:", report);
+        Assert.Contains("Total Production (per turn):", report);
         Assert.Contains("Food:", report);
+        Assert.Contains("Turns to hit targets:", report);
     }
 
     // --- Influence-count tests ---
@@ -804,5 +809,117 @@ public class SimulatorTests
             "ShrineOfVeiledLady appears more than once");
         Assert.True(allStructures.Count(s => s.Type == StructureType.Quartermaster)      <= 1,
             "Quartermaster appears more than once");
+    }
+
+    // --- TurnsToComplete and SimulationSettings target tests ---
+
+    [Fact]
+    public void SimulationSettings_ResourceTargets_HaveCorrectDefaults()
+    {
+        var settings = new SimulationSettings();
+        Assert.Equal(296_300, settings.LumberTarget);
+        Assert.Equal(343_400, settings.StoneTarget);
+        Assert.Equal(143_650, settings.MetalTarget);
+        Assert.Equal(1_450,   settings.PetriciteTarget);
+    }
+
+    [Fact]
+    public void TurnsToComplete_ExactProduction_ReturnsOneForEachResource()
+    {
+        var settings = new SimulationSettings
+        {
+            LumberTarget    = 100,
+            StoneTarget     = 200,
+            MetalTarget     = 50,
+            PetriciteTarget = 10,
+        };
+        // Production exactly equals each target → 1 turn each
+        var output = new ResourceOutput(Lumber: 100, Stone: 200, Metal: 50, Petricite: 10);
+        var turns = Simulator.TurnsToComplete(output, settings);
+
+        Assert.Equal(1, turns.Lumber);
+        Assert.Equal(1, turns.Stone);
+        Assert.Equal(1, turns.Metal);
+        Assert.Equal(1, turns.Petricite);
+        Assert.Equal(1, turns.Max);
+    }
+
+    [Fact]
+    public void TurnsToComplete_CeilingDivision_RoundsUp()
+    {
+        var settings = new SimulationSettings
+        {
+            LumberTarget    = 10,
+            StoneTarget     = 0,
+            MetalTarget     = 0,
+            PetriciteTarget = 0,
+        };
+        // 10 / 3 = 3.33… → 4 turns needed
+        var output = new ResourceOutput(Lumber: 3, Stone: 1, Metal: 1, Petricite: 1);
+        var turns = Simulator.TurnsToComplete(output, settings);
+
+        Assert.Equal(4, turns.Lumber);
+        Assert.Equal(0, turns.Stone);
+        Assert.Equal(0, turns.Metal);
+        Assert.Equal(0, turns.Petricite);
+        Assert.Equal(4, turns.Max);
+    }
+
+    [Fact]
+    public void TurnsToComplete_ZeroProduction_ReturnsIntMaxForThatResource()
+    {
+        var settings = new SimulationSettings
+        {
+            LumberTarget    = 100,
+            StoneTarget     = 0,
+            MetalTarget     = 0,
+            PetriciteTarget = 0,
+        };
+        var output = new ResourceOutput(Lumber: 0, Stone: 0, Metal: 0, Petricite: 0);
+        var turns = Simulator.TurnsToComplete(output, settings);
+
+        Assert.Equal(int.MaxValue, turns.Lumber);
+        Assert.Equal(int.MaxValue, turns.Max);
+    }
+
+    [Fact]
+    public void TurnsToComplete_ZeroTarget_ReturnsZeroTurns()
+    {
+        var settings = new SimulationSettings
+        {
+            LumberTarget    = 0,
+            StoneTarget     = 0,
+            MetalTarget     = 0,
+            PetriciteTarget = 0,
+        };
+        var output = new ResourceOutput(Lumber: 10, Stone: 10, Metal: 10, Petricite: 10);
+        var turns = Simulator.TurnsToComplete(output, settings);
+
+        Assert.Equal(0, turns.Lumber);
+        Assert.Equal(0, turns.Stone);
+        Assert.Equal(0, turns.Metal);
+        Assert.Equal(0, turns.Petricite);
+        Assert.Equal(0, turns.Max);
+    }
+
+    [Fact]
+    public void TurnsToComplete_MixedTargets_MaxIdentifiesBottleneck()
+    {
+        // Lumber needs 50 turns, all other targets are 0 (already met) → Max is 50.
+        var settings = new SimulationSettings
+        {
+            LumberTarget    = 500,
+            StoneTarget     = 0,
+            MetalTarget     = 0,
+            PetriciteTarget = 0,
+        };
+        var output = new ResourceOutput(Lumber: 10, Stone: 9999, Metal: 9999, Petricite: 9999);
+        var turns = Simulator.TurnsToComplete(output, settings);
+
+        Assert.Equal(50, turns.Lumber);
+        Assert.Equal(0,  turns.Stone);
+        Assert.Equal(0,  turns.Metal);
+        Assert.Equal(0,  turns.Petricite);
+        Assert.Equal(50, turns.Max);
     }
 }

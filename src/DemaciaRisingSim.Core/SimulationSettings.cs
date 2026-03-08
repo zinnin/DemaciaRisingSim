@@ -41,4 +41,16 @@ public class SimulationSettings
     /// slots are filled with production structures. Default: 2.
     /// </summary>
     public int FoodTargetPerSettlement { get; set; } = 2;
+
+    /// <summary>Total Lumber the player needs to accumulate. Default: 296 300.</summary>
+    public int LumberTarget { get; set; } = 296_300;
+
+    /// <summary>Total Stone the player needs to accumulate. Default: 343 400.</summary>
+    public int StoneTarget { get; set; } = 343_400;
+
+    /// <summary>Total Metal the player needs to accumulate. Default: 143 650.</summary>
+    public int MetalTarget { get; set; } = 143_650;
+
+    /// <summary>Total Petricite the player needs to accumulate. Default: 1 450.</summary>
+    public int PetriciteTarget { get; set; } = 1_450;
 }
