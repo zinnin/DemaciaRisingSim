@@ -2,81 +2,75 @@ namespace DemaciaRisingSim.Core;
 
 /// <summary>
 /// Provides the default board configuration for Demacia Rising with all 16 settlements.
-/// Each settlement has its terrain, tile count, and academy buff zone defined.
-/// Settlement connections (for marketplace bonuses) are set up via AddLink.
+/// Each settlement has its environment, 6 structure slots, and academy buff zone defined.
+/// Settlement connections (for Marketplace bonuses) are set up via AddLink.
 /// </summary>
 public static class BoardData
 {
     /// <summary>
-    /// Creates a fresh default board with all 16 settlements initialized to Lumber tiles.
+    /// Creates a fresh default board with all 16 settlements, each initialized to
+    /// Lumberyard level 1 in every slot.
     /// </summary>
     public static Dictionary<string, Settlement> CreateDefaultBoard()
     {
-        var theGreatCity   = new Settlement("The Great City",  TerrainType.Petricite,
+        var theGreatCity   = new Settlement("The Great City",  EnvironmentType.Petricite,
             academyBuff: ["The Great City"],
-            tileCount: 5);
+            isCapital: true);
 
-        var brookhollow    = new Settlement("Brookhollow",     TerrainType.Heartland,
-            academyBuff: ["Brookhollow", "Hayneath", "Jandelle", "Tylburne", "Vaskasia"],
-            tileCount: 6);
+        var brookhollow    = new Settlement("Brookhollow",     EnvironmentType.Heartland,
+            academyBuff: ["Brookhollow", "Hayneath", "Jandelle", "Tylburne", "Vaskasia"]);
 
-        var cloudfield     = new Settlement("Cloudfield",      TerrainType.Border,
-            academyBuff: ["Cloudfield", "Dawnhold", "Fossbarrow", "Meltridge", "Terbisia"],
-            tileCount: 5);
+        var cloudfield     = new Settlement("Cloudfield",      EnvironmentType.Border,
+            academyBuff: ["Cloudfield", "Dawnhold", "Fossbarrow", "Meltridge", "Terbisia"]);
 
-        var dawnhold       = new Settlement("Dawnhold",        TerrainType.Petricite | TerrainType.Border,
-            academyBuff: ["Cloudfield", "Dawnhold", "Fossbarrow", "Meltridge", "Terbisia"],
-            tileCount: 5);
+        var dawnhold       = new Settlement("Dawnhold",        EnvironmentType.Petricite | EnvironmentType.Border,
+            academyBuff: ["Cloudfield", "Dawnhold", "Fossbarrow", "Meltridge", "Terbisia"]);
 
-        var evenmoor       = new Settlement("Evenmoor",        TerrainType.Mountain,
-            academyBuff: ["Evenmoor", "Hawkstone", "High Silvermere", "Pinara", "Uwendale"],
-            tileCount: 5);
+        var evenmoor       = new Settlement("Evenmoor",        EnvironmentType.Mountain,
+            academyBuff: ["Evenmoor", "Hawkstone", "High Silvermere", "Pinara", "Uwendale"]);
 
-        var fossbarrow     = new Settlement("Fossbarrow",      TerrainType.Border,
-            academyBuff: ["Cloudfield", "Dawnhold", "Fossbarrow", "Meltridge", "Terbisia"],
-            tileCount: 5);
+        var fossbarrow     = new Settlement("Fossbarrow",      EnvironmentType.Border,
+            academyBuff: ["Cloudfield", "Dawnhold", "Fossbarrow", "Meltridge", "Terbisia"]);
 
-        var hawkstone      = new Settlement("Hawkstone",       TerrainType.Mountain,
-            academyBuff: ["Evenmoor", "Hawkstone", "High Silvermere", "Pinara", "Uwendale"],
-            tileCount: 5);
+        var hawkstone      = new Settlement("Hawkstone",       EnvironmentType.Mountain,
+            academyBuff: ["Evenmoor", "Hawkstone", "High Silvermere", "Pinara", "Uwendale"]);
 
-        var hayneath       = new Settlement("Hayneath",        TerrainType.Heartland,
-            academyBuff: ["Brookhollow", "Hayneath", "Jandelle", "Tylburne", "Vaskasia"],
-            tileCount: 6);
+        var hayneath       = new Settlement("Hayneath",        EnvironmentType.Heartland,
+            academyBuff: ["Brookhollow", "Hayneath", "Jandelle", "Tylburne", "Vaskasia"]);
 
-        var highSilvermere = new Settlement("High Silvermere", TerrainType.Petricite | TerrainType.Mountain,
-            academyBuff: ["Evenmoor", "Hawkstone", "High Silvermere", "Pinara", "Uwendale"],
-            tileCount: 5);
+        var highSilvermere = new Settlement("High Silvermere", EnvironmentType.Petricite | EnvironmentType.Mountain,
+            academyBuff: ["Evenmoor", "Hawkstone", "High Silvermere", "Pinara", "Uwendale"]);
 
-        var jandelle       = new Settlement("Jandelle",        TerrainType.Heartland,
-            academyBuff: ["Brookhollow", "Hayneath", "Jandelle", "Tylburne", "Vaskasia"],
-            tileCount: 6);
+        var jandelle       = new Settlement("Jandelle",        EnvironmentType.Heartland,
+            academyBuff: ["Brookhollow", "Hayneath", "Jandelle", "Tylburne", "Vaskasia"]);
 
-        var meltridge      = new Settlement("Meltridge",       TerrainType.Border,
-            academyBuff: ["Cloudfield", "Dawnhold", "Fossbarrow", "Meltridge", "Terbisia"],
-            tileCount: 5);
+        var meltridge      = new Settlement("Meltridge",       EnvironmentType.Border,
+            academyBuff: ["Cloudfield", "Dawnhold", "Fossbarrow", "Meltridge", "Terbisia"]);
 
-        var pinara         = new Settlement("Pinara",          TerrainType.Mountain,
-            academyBuff: ["Evenmoor", "Hawkstone", "High Silvermere", "Pinara", "Uwendale"],
-            tileCount: 5);
+        var pinara         = new Settlement("Pinara",          EnvironmentType.Mountain,
+            academyBuff: ["Evenmoor", "Hawkstone", "High Silvermere", "Pinara", "Uwendale"]);
 
-        var terbisia       = new Settlement("Terbisia",        TerrainType.Border,
-            academyBuff: ["Cloudfield", "Dawnhold", "Fossbarrow", "Meltridge", "Terbisia"],
-            tileCount: 5);
+        var terbisia       = new Settlement("Terbisia",        EnvironmentType.Border,
+            academyBuff: ["Cloudfield", "Dawnhold", "Fossbarrow", "Meltridge", "Terbisia"]);
 
-        var tylburne       = new Settlement("Tylburne",        TerrainType.Petricite | TerrainType.Heartland,
-            academyBuff: ["Brookhollow", "Hayneath", "Jandelle", "Tylburne", "Vaskasia"],
-            tileCount: 6);
+        var tylburne       = new Settlement("Tylburne",        EnvironmentType.Petricite | EnvironmentType.Heartland,
+            academyBuff: ["Brookhollow", "Hayneath", "Jandelle", "Tylburne", "Vaskasia"]);
 
-        var uwendale       = new Settlement("Uwendale",        TerrainType.Mountain,
-            academyBuff: ["Evenmoor", "Hawkstone", "High Silvermere", "Pinara", "Uwendale"],
-            tileCount: 5);
+        var uwendale       = new Settlement("Uwendale",        EnvironmentType.Mountain,
+            academyBuff: ["Evenmoor", "Hawkstone", "High Silvermere", "Pinara", "Uwendale"]);
 
-        var vaskasia       = new Settlement("Vaskasia",        TerrainType.Heartland,
-            academyBuff: ["Brookhollow", "Hayneath", "Jandelle", "Tylburne", "Vaskasia"],
-            tileCount: 6);
+        var vaskasia       = new Settlement("Vaskasia",        EnvironmentType.Heartland,
+            academyBuff: ["Brookhollow", "Hayneath", "Jandelle", "Tylburne", "Vaskasia"]);
 
-        // Set up settlement connections (marketplace bonus links)
+        // Fill every slot with Lumberyard L1 as the default starting state
+        var all = new[] {
+            theGreatCity, brookhollow, cloudfield, dawnhold, evenmoor, fossbarrow,
+            hawkstone, hayneath, highSilvermere, jandelle, meltridge, pinara,
+            terbisia, tylburne, uwendale, vaskasia };
+        foreach (var s in all)
+            Array.Fill(s.Structures, new Structure(StructureType.Lumberyard, 1));
+
+        // Set up settlement connections (Marketplace bonus links)
         theGreatCity.AddLink(dawnhold);
         theGreatCity.AddLink(highSilvermere);
         theGreatCity.AddLink(tylburne);

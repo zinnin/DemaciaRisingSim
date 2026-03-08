@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:DemaciaRisingSim.UI"
         mc:Ignorable="d"
-        Title="Demacia Rising Simulator" Height="650" Width="960"
+        Title="Demacia Rising Simulator" Height="720" Width="1100"
         Background="#1a1a2e">
 
     <Window.Resources>
@@ -19,6 +19,15 @@
         </Style>
         <Style TargetType="TextBlock">
             <Setter Property="Foreground" Value="#e2e2e2"/>
+        </Style>
+        <Style TargetType="CheckBox">
+            <Setter Property="Foreground" Value="#e2e2e2"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style TargetType="ComboBox">
+            <Setter Property="Background" Value="#16213e"/>
+            <Setter Property="Foreground" Value="#e2e2e2"/>
+            <Setter Property="BorderBrush" Value="#0f3460"/>
         </Style>
         <Style TargetType="DataGrid">
             <Setter Property="Background" Value="#16213e"/>
@@ -46,7 +55,7 @@
         <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
             <TextBlock Text="Demacia Rising — Board Simulator" FontSize="22" FontWeight="Bold"
                        Foreground="#e2d6a0"/>
-            <TextBlock Text="Visualize settlement layouts and optimize tile assignments for maximum production score"
+            <TextBlock Text="Visualize settlement layouts and optimize structure assignments for maximum production score"
                        Foreground="#aaaacc" FontSize="12" Margin="0,2,0,0"/>
         </StackPanel>
 
@@ -57,6 +66,34 @@
             <TextBlock x:Name="StatusText" Text="{Binding StatusMessage}"
                        Foreground="#aaaacc" VerticalAlignment="Center" FontSize="12"/>
         </StackPanel>
+
+        <!-- Simulation settings panel -->
+        <Border DockPanel.Dock="Top" Background="#16213e" BorderBrush="#0f3460"
+                BorderThickness="1" CornerRadius="4" Padding="10,8" Margin="0,0,0,6">
+            <StackPanel>
+                <TextBlock Text="Optimization Settings" FontWeight="SemiBold" Foreground="#e2d6a0"
+                           Margin="0,0,0,6"/>
+                <StackPanel Orientation="Horizontal">
+                    <!-- Required structures -->
+                    <TextBlock Text="Required structures:" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <CheckBox Content="Durand's Workshop" IsChecked="{Binding RequireDurandsWorkshop}"
+                              Margin="0,0,14,0"/>
+                    <CheckBox Content="Shrine of the Veiled Lady" IsChecked="{Binding RequireShrineOfVeiledLady}"
+                              Margin="0,0,14,0"/>
+                    <CheckBox Content="Quartermaster" IsChecked="{Binding RequireQuartermaster}"
+                              Margin="0,0,24,0"/>
+                    <!-- Max building level -->
+                    <TextBlock Text="Max building level:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <ComboBox SelectedValue="{Binding MaxBuildingLevel}" Width="55"
+                              SelectedValuePath="Tag" VerticalAlignment="Center">
+                        <ComboBoxItem Content="1" Tag="1"/>
+                        <ComboBoxItem Content="2" Tag="2"/>
+                        <ComboBoxItem Content="3" Tag="3"/>
+                        <ComboBoxItem Content="4" Tag="4" IsSelected="True"/>
+                    </ComboBox>
+                </StackPanel>
+            </StackPanel>
+        </Border>
 
         <!-- Summary totals -->
         <Border DockPanel.Dock="Top" Background="#16213e" BorderBrush="#0f3460"
@@ -70,7 +107,9 @@
                 <TextBlock Text="Metal: " Foreground="#ccaa66"/>
                 <TextBlock Text="{Binding TotalMetal}" Foreground="#ccaa66" FontWeight="Bold" Margin="0,0,14,0"/>
                 <TextBlock Text="Petricite: " Foreground="#cc88cc"/>
-                <TextBlock Text="{Binding TotalPetricite}" Foreground="#cc88cc" FontWeight="Bold" Margin="0,0,20,0"/>
+                <TextBlock Text="{Binding TotalPetricite}" Foreground="#cc88cc" FontWeight="Bold" Margin="0,0,14,0"/>
+                <TextBlock Text="Food: " Foreground="#88ddaa"/>
+                <TextBlock Text="{Binding TotalFood}" Foreground="#88ddaa" FontWeight="Bold" Margin="0,0,20,0"/>
                 <TextBlock Text="Score: " Foreground="#e2d6a0" FontWeight="SemiBold"/>
                 <TextBlock Text="{Binding Score}" Foreground="#e2d6a0" FontWeight="Bold" FontSize="15"/>
             </StackPanel>
@@ -83,13 +122,14 @@
                   SelectionMode="Single" SelectionUnit="FullRow"
                   HeadersVisibility="Column" RowHeight="26">
             <DataGrid.Columns>
-                <DataGridTextColumn Header="Settlement" Binding="{Binding SettlementName}" Width="160"/>
-                <DataGridTextColumn Header="Terrain" Binding="{Binding Terrain}" Width="180"/>
-                <DataGridTextColumn Header="Tiles" Binding="{Binding Tiles}" Width="*"/>
-                <DataGridTextColumn Header="Lumber" Binding="{Binding Lumber}" Width="80"/>
-                <DataGridTextColumn Header="Stone" Binding="{Binding Stone}" Width="80"/>
-                <DataGridTextColumn Header="Metal" Binding="{Binding Metal}" Width="80"/>
-                <DataGridTextColumn Header="Petricite" Binding="{Binding Petricite}" Width="80"/>
+                <DataGridTextColumn Header="Settlement"   Binding="{Binding SettlementName}" Width="160"/>
+                <DataGridTextColumn Header="Environment"  Binding="{Binding Environment}"    Width="160"/>
+                <DataGridTextColumn Header="Structures"   Binding="{Binding Structures}"     Width="*"/>
+                <DataGridTextColumn Header="Lumber"       Binding="{Binding Lumber}"         Width="70"/>
+                <DataGridTextColumn Header="Stone"        Binding="{Binding Stone}"          Width="70"/>
+                <DataGridTextColumn Header="Metal"        Binding="{Binding Metal}"          Width="70"/>
+                <DataGridTextColumn Header="Petricite"    Binding="{Binding Petricite}"      Width="70"/>
+                <DataGridTextColumn Header="Food"         Binding="{Binding Food}"           Width="60"/>
             </DataGrid.Columns>
         </DataGrid>
 

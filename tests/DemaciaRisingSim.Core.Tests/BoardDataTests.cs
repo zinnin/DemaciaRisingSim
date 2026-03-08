@@ -26,57 +26,72 @@ public class BoardDataTests
     }
 
     [Fact]
-    public void CreateDefaultBoard_HeartlandSettlements_HaveSixTiles()
+    public void CreateDefaultBoard_AllSettlementsHaveSixSlots()
     {
         var board = BoardData.CreateDefaultBoard();
-        // Heartland settlements: Brookhollow, Hayneath, Jandelle, Vaskasia (6 tiles each)
-        foreach (var name in new[] { "Brookhollow", "Hayneath", "Jandelle", "Vaskasia" })
-            Assert.Equal(6, board[name].Tiles.Length);
+        foreach (var settlement in board.Values)
+            Assert.Equal(GameConstants.SettlementSlotCount, settlement.Structures.Length);
+    }
+
+    [Fact]
+    public void CreateDefaultBoard_AllSlotsInitializedToLumberyardL1()
+    {
+        var board = BoardData.CreateDefaultBoard();
+        var expected = new Structure(StructureType.Lumberyard, 1);
+        foreach (var settlement in board.Values)
+            foreach (var structure in settlement.Structures)
+                Assert.Equal(expected, structure);
+    }
+
+    [Fact]
+    public void CreateDefaultBoard_TheGreatCity_IsCapital()
+    {
+        var board = BoardData.CreateDefaultBoard();
+        Assert.True(board["The Great City"].IsCapital);
+        Assert.True(board["The Great City"].AllowsPetriciteMill);
+    }
+
+    [Fact]
+    public void CreateDefaultBoard_NonCapitalSettlements_DoNotAllowPetriciteMill()
+    {
+        var board = BoardData.CreateDefaultBoard();
+        foreach (var kv in board.Where(kv => kv.Key != "The Great City"))
+            Assert.False(kv.Value.AllowsPetriciteMill, $"Settlement {kv.Key} should not allow PetriciteMill");
     }
 
     [Fact]
     public void CreateDefaultBoard_Tylburne_IsHeartlandAndPetricite()
     {
         var board = BoardData.CreateDefaultBoard();
-        Assert.True(board["Tylburne"].Terrain.HasFlag(TerrainType.Heartland));
-        Assert.True(board["Tylburne"].Terrain.HasFlag(TerrainType.Petricite));
-        Assert.Equal(6, board["Tylburne"].Tiles.Length);
+        Assert.True(board["Tylburne"].Environment.HasFlag(EnvironmentType.Heartland));
+        Assert.True(board["Tylburne"].Environment.HasFlag(EnvironmentType.Petricite));
     }
 
     [Fact]
-    public void CreateDefaultBoard_PetriciteSettlements_AllowPetricite()
-    {
-        var board = BoardData.CreateDefaultBoard();
-        foreach (var name in new[] { "The Great City", "Dawnhold", "High Silvermere", "Tylburne" })
-            Assert.True(board[name].AllowsPetricite, $"Settlement {name} should allow petricite tiles");
-    }
-
-    [Fact]
-    public void CreateDefaultBoard_NonPetriciteSettlements_DoNotAllowPetricite()
-    {
-        var board = BoardData.CreateDefaultBoard();
-        foreach (var name in new[]
-        {
-            "Brookhollow", "Cloudfield", "Evenmoor", "Fossbarrow", "Hawkstone",
-            "Hayneath", "Jandelle", "Meltridge", "Pinara", "Terbisia", "Uwendale", "Vaskasia",
-        })
-            Assert.False(board[name].AllowsPetricite, $"Settlement {name} should not allow petricite tiles");
-    }
-
-    [Fact]
-    public void CreateDefaultBoard_MountainSettlements_HaveCorrectTerrain()
+    public void CreateDefaultBoard_MountainSettlements_HaveCorrectEnvironment()
     {
         var board = BoardData.CreateDefaultBoard();
         foreach (var name in new[] { "Evenmoor", "Hawkstone", "Pinara", "Uwendale" })
-            Assert.True(board[name].Terrain.HasFlag(TerrainType.Mountain), $"Settlement {name} should be mountain terrain");
+            Assert.True(board[name].Environment.HasFlag(EnvironmentType.Mountain),
+                $"Settlement {name} should have Mountain environment");
     }
 
     [Fact]
-    public void CreateDefaultBoard_BorderSettlements_HaveCorrectTerrain()
+    public void CreateDefaultBoard_BorderSettlements_HaveCorrectEnvironment()
     {
         var board = BoardData.CreateDefaultBoard();
         foreach (var name in new[] { "Cloudfield", "Fossbarrow", "Meltridge", "Terbisia" })
-            Assert.True(board[name].Terrain.HasFlag(TerrainType.Border), $"Settlement {name} should be border terrain");
+            Assert.True(board[name].Environment.HasFlag(EnvironmentType.Border),
+                $"Settlement {name} should have Border environment");
+    }
+
+    [Fact]
+    public void CreateDefaultBoard_HeartlandSettlements_HaveCorrectEnvironment()
+    {
+        var board = BoardData.CreateDefaultBoard();
+        foreach (var name in new[] { "Brookhollow", "Hayneath", "Jandelle", "Vaskasia" })
+            Assert.True(board[name].Environment.HasFlag(EnvironmentType.Heartland),
+                $"Settlement {name} should have Heartland environment");
     }
 
     [Fact]
@@ -91,13 +106,13 @@ public class BoardDataTests
     public void Clone_CreatesDeepCopy()
     {
         var board = BoardData.CreateDefaultBoard();
-        board["The Great City"].Tiles[0] = TileType.Stone;
+        board["The Great City"].Structures[0] = new Structure(StructureType.Quarry, 2);
 
         var clone = BoardData.Clone(board);
-        Assert.Equal(TileType.Stone, clone["The Great City"].Tiles[0]);
+        Assert.Equal(new Structure(StructureType.Quarry, 2), clone["The Great City"].Structures[0]);
 
         // Mutating original should not affect clone
-        board["The Great City"].Tiles[0] = TileType.Metal;
-        Assert.Equal(TileType.Stone, clone["The Great City"].Tiles[0]);
+        board["The Great City"].Structures[0] = new Structure(StructureType.Forge, 1);
+        Assert.Equal(new Structure(StructureType.Quarry, 2), clone["The Great City"].Structures[0]);
     }
 }
