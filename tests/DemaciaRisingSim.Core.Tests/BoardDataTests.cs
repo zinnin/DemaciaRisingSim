@@ -52,11 +52,20 @@ public class BoardDataTests
     }
 
     [Fact]
-    public void CreateDefaultBoard_NonCapitalSettlements_DoNotAllowPetriciteMill()
+    public void CreateDefaultBoard_PetriciteTerrain_AllowsPetriciteMill()
     {
+        // PetriciteMill is available in all Petricite-terrain settlements, not just the capital.
         var board = BoardData.CreateDefaultBoard();
-        foreach (var kv in board.Where(kv => kv.Key != "The Great City"))
-            Assert.False(kv.Value.AllowsPetriciteMill, $"Settlement {kv.Key} should not allow PetriciteMill");
+        var petriciteSettlements = new[] { "The Great City", "Dawnhold", "High Silvermere", "Tylburne" };
+        var nonPetriciteNames   = board.Keys.Except(petriciteSettlements).ToArray();
+
+        foreach (var name in petriciteSettlements)
+            Assert.True(board[name].AllowsPetriciteMill,
+                $"Settlement {name} (Petricite terrain) should allow PetriciteMill");
+
+        foreach (var name in nonPetriciteNames)
+            Assert.False(board[name].AllowsPetriciteMill,
+                $"Settlement {name} (no Petricite terrain) should not allow PetriciteMill");
     }
 
     [Fact]

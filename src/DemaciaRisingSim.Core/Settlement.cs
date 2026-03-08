@@ -43,9 +43,10 @@ public class Settlement
     public void AddLink(Settlement other) => _neighbors.Add(other.Name);
 
     /// <summary>
-    /// Returns true if a Petricite Mill may be placed in this settlement (capital only).
+    /// Returns true if a Petricite Mill may be placed in this settlement.
+    /// Petricite Mills can be built in any settlement with Petricite terrain.
     /// </summary>
-    public bool AllowsPetriciteMill => IsCapital;
+    public bool AllowsPetriciteMill => Environment.HasFlag(EnvironmentType.Petricite);
 
     /// <summary>Creates a deep copy of this settlement.</summary>
     public Settlement Clone()

@@ -218,23 +218,20 @@ public static class StructureData
             MarketplaceMultiplier: 0, AcademyMultiplier: 0,
             CostLumber: 500, CostStone: 1250, CostMetal: 0, CostPetricite: 0, BuildTurns: 5));
 
-        // --- Petricite Mill (3 levels, Capital only) ---
-        // Produces Petricite every turn; can only be constructed in the Capital settlement.
+        // --- Petricite Mill (3 levels, Petricite terrain only) ---
+        // Produces Petricite every turn; can only be constructed in settlements with Petricite terrain.
         Add(new(StructureType.PetriciteMill, 1,
             LumberOutput: 0, StoneOutput: 0, MetalOutput: 0, PetriciteOutput: 1, FoodOutput: 0,
             MarketplaceMultiplier: 0, AcademyMultiplier: 0,
-            CostLumber: 800, CostStone: 0, CostMetal: 80, CostPetricite: 0, BuildTurns: 5,
-            CapitalOnly: true));
+            CostLumber: 800, CostStone: 0, CostMetal: 80, CostPetricite: 0, BuildTurns: 5));
         Add(new(StructureType.PetriciteMill, 2,
             LumberOutput: 0, StoneOutput: 0, MetalOutput: 0, PetriciteOutput: 2, FoodOutput: 0,
             MarketplaceMultiplier: 0, AcademyMultiplier: 0,
-            CostLumber: 1750, CostStone: 1000, CostMetal: 500, CostPetricite: 0, BuildTurns: 5,
-            CapitalOnly: true));
+            CostLumber: 1750, CostStone: 1000, CostMetal: 500, CostPetricite: 0, BuildTurns: 5));
         Add(new(StructureType.PetriciteMill, 3,
             LumberOutput: 0, StoneOutput: 0, MetalOutput: 0, PetriciteOutput: 3, FoodOutput: 0,
             MarketplaceMultiplier: 0, AcademyMultiplier: 0,
-            CostLumber: 7500, CostStone: 3500, CostMetal: 2500, CostPetricite: 0, BuildTurns: 5,
-            CapitalOnly: true));
+            CostLumber: 7500, CostStone: 3500, CostMetal: 2500, CostPetricite: 0, BuildTurns: 5));
 
         // --- Marketplace (3 levels) ---
         // Grants % resource bonus to all adjacent (linked) settlements. Effect can stack.

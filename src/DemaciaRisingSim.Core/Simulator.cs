@@ -590,7 +590,17 @@ public static class Simulator
         if (settlement.Environment.HasFlag(EnvironmentType.Border) && !hasPriorForge)
             metalVal *= 2.0;
 
-        double best = Math.Max(lumberVal, Math.Max(stoneVal, metalVal));
+        // PetriciteMill value: available in Petricite terrain settlements
+        double petriciteVal = 0;
+        if (settlement.AllowsPetriciteMill)
+        {
+            int millLevel = Math.Max(1, Math.Min(3, maxLevel));
+            int maxPetriciteOutput = StructureData.Get(StructureType.PetriciteMill, 3).PetriciteOutput;
+            petriciteVal = (double)StructureData.Get(StructureType.PetriciteMill, millLevel).PetriciteOutput
+                           / maxPetriciteOutput;
+        }
+
+        double best = Math.Max(lumberVal, Math.Max(stoneVal, Math.Max(metalVal, petriciteVal)));
         return best * settlement.Multiplier;
     }
 
