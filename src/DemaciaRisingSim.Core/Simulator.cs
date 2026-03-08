@@ -176,8 +176,24 @@ public static class Simulator
 
                 var originalStructure = settlement.Structures[slotIndex];
 
+                // Pre-compute which unique structure types already occupy a different slot on the
+                // committed board. Checked once per slot (not per candidate) for efficiency.
+                var presentUniqueElsewhere = new HashSet<StructureType>();
+                foreach (var s in board.Values)
+                    for (int i = 0; i < s.Structures.Length; i++)
+                    {
+                        if (s.Name == settlementName && i == slotIndex) continue;
+                        if (UniqueStructureTypes.Contains(s.Structures[i].Type))
+                            presentUniqueElsewhere.Add(s.Structures[i].Type);
+                    }
+
                 foreach (var candidate in candidates)
                 {
+                    // Unique structures may appear at most once on the board.
+                    if (candidate.Type != StructureType.Empty &&
+                        presentUniqueElsewhere.Contains(candidate.Type))
+                        continue;
+
                     settlement.Structures[slotIndex] = candidate;
                     double candidateScore = Score(current);
                     if (candidateScore > highScore)
@@ -315,7 +331,7 @@ public static class Simulator
         if (settings.FoodTargetPerSettlement > 0)
         {
             // Farm structures go up to level 4 (unlike buff structures which cap at 3).
-            int farmLevel = Math.Min(4, maxLevel);
+            int maxFarmLevel = Math.Min(4, maxLevel);
             foreach (var s in work.Values)
             {
                 if (settings.LockedSettlements.Contains(s.Name)) continue;
@@ -328,11 +344,29 @@ public static class Simulator
                     .Where(sv => sv.Name == s.Name && !usedSlotSet.Contains((sv.Name, sv.Slot)))
                     .ToList();
 
+                // Track farms already in this settlement to determine the Heartland bonus accurately.
+                int existingFarms = s.Structures.Count(st => st.Type == StructureType.Farm);
+
                 foreach (var (name, slot, _) in settlSlots)
                 {
                     if (foodNeeded <= 0) break;
 
-                    s.Structures[slot] = new Structure(StructureType.Farm, farmLevel);
+                    // Select the minimum farm level that meets the remaining food need in this
+                    // single placement, accounting for the Heartland +1 bonus on the first two farms.
+                    int heartlandBonus = s.Environment.HasFlag(EnvironmentType.Heartland) && existingFarms < 2 ? 1 : 0;
+
+                    int farmLevelToUse = maxFarmLevel;
+                    for (int level = 1; level <= maxFarmLevel; level++)
+                    {
+                        if (StructureData.Get(StructureType.Farm, level).FoodOutput + heartlandBonus >= foodNeeded)
+                        {
+                            farmLevelToUse = level;
+                            break;
+                        }
+                    }
+
+                    s.Structures[slot] = new Structure(StructureType.Farm, farmLevelToUse);
+                    existingFarms++;
                     fixedSlots.Add((name, slot));
                     usedSlotSet.Add((name, slot));
 
@@ -422,6 +456,14 @@ public static class Simulator
 
         return sb.ToString();
     }
+
+    // Structure types that may appear at most once on the entire board.
+    private static readonly HashSet<StructureType> UniqueStructureTypes =
+    [
+        StructureType.DurandsWorkshop,
+        StructureType.ShrineOfVeiledLady,
+        StructureType.Quartermaster,
+    ];
 
     // -------------------------------------------------------------------------
     // Private helpers

@@ -735,4 +735,74 @@ public class SimulatorTests
         var settings = new SimulationSettings();
         Assert.Equal(2, settings.FoodTargetPerSettlement);
     }
+
+    [Fact]
+    public void SmartAllocateBoard_FoodTarget_PerSettlementFoodMatchesTarget()
+    {
+        // Each settlement should receive no more than FoodTargetPerSettlement food
+        // (plus at most 1 from an unavoidable Heartland terrain bonus rounding).
+        // Previously, max-level (L4) farms were always placed even when L1/L2 sufficed,
+        // causing 5+ food per settlement instead of the target 2.
+        var board = BoardData.CreateDefaultBoard();
+        var settings = new SimulationSettings
+        {
+            RequireDurandsWorkshop    = false,
+            RequireShrineOfVeiledLady = false,
+            RequireQuartermaster      = false,
+            FoodTargetPerSettlement   = 2,
+            MaxBuildingLevel          = 4,
+        };
+        var allocated = Simulator.SmartAllocateBoard(board, settings);
+
+        foreach (var settlement in allocated.Values)
+        {
+            int food = Simulator.SettlementOutput(settlement).Food;
+            Assert.True(food >= 2,
+                $"{settlement.Name} has only {food} food (target: 2)");
+            // Food must not exceed the target by more than 1 (one unavoidable Heartland rounding unit).
+            Assert.True(food <= 3,
+                $"{settlement.Name} has {food} food, which overshoots the target of 2");
+        }
+    }
+
+    [Fact]
+    public void OptimizeBoard_UniqueStructures_AppearAtMostOnce()
+    {
+        // DurandsWorkshop, ShrineOfVeiledLady, and Quartermaster must each appear
+        // at most once on the optimized board.
+        var board = BoardData.CreateDefaultBoard();
+        var settings = new SimulationSettings
+        {
+            RequireDurandsWorkshop    = true,
+            RequireShrineOfVeiledLady = true,
+            RequireQuartermaster      = true,
+            FoodTargetPerSettlement   = 0,
+        };
+        var optimized = Simulator.OptimizeBoard(board, settings);
+
+        var allStructures = optimized.Values.SelectMany(s => s.Structures).ToList();
+
+        Assert.Equal(1, allStructures.Count(s => s.Type == StructureType.DurandsWorkshop));
+        Assert.Equal(1, allStructures.Count(s => s.Type == StructureType.ShrineOfVeiledLady));
+        Assert.Equal(1, allStructures.Count(s => s.Type == StructureType.Quartermaster));
+    }
+
+    [Fact]
+    public void Permutate_UniqueStructures_AppearAtMostOnce()
+    {
+        // Even when Permutate runs without SmartAllocate fixed slots, unique structures
+        // must not be duplicated (DurandsWorkshop produces Petricite so the optimizer
+        // would otherwise keep adding copies to improve the score).
+        var board = BoardData.CreateDefaultBoard();
+        var result = Simulator.Permutate(board);
+
+        var allStructures = result.Values.SelectMany(s => s.Structures).ToList();
+
+        Assert.True(allStructures.Count(s => s.Type == StructureType.DurandsWorkshop)    <= 1,
+            "DurandsWorkshop appears more than once");
+        Assert.True(allStructures.Count(s => s.Type == StructureType.ShrineOfVeiledLady) <= 1,
+            "ShrineOfVeiledLady appears more than once");
+        Assert.True(allStructures.Count(s => s.Type == StructureType.Quartermaster)      <= 1,
+            "Quartermaster appears more than once");
+    }
 }
