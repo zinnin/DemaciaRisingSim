@@ -68,8 +68,8 @@
 
         <!-- Toolbar -->
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,10">
-            <Button Content="Load Default Board" Click="LoadDefault_Click" Margin="0,0,8,0"/>
-            <Button Content="Optimize Board" Click="Optimize_Click" Margin="0,0,8,0"/>
+            <Button Content="Load Default Board" Command="{Binding LoadDefaultCommand}" Margin="0,0,8,0"/>
+            <Button Content="Optimize Board" Command="{Binding OptimizeCommand}" Margin="0,0,8,0"/>
             <TextBlock x:Name="StatusText" Text="{Binding StatusMessage}"
                        Foreground="#aaaacc" VerticalAlignment="Center" FontSize="12"/>
         </StackPanel>
