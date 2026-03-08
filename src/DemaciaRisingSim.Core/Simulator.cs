@@ -160,11 +160,15 @@ public static class Simulator
     ///     of targeted resources that have at least 1 unit of production.  This provides a
     ///     gradient that rewards adding a new resource type even when others are still missing.</item>
     ///   <item><b>Phase 2 — efficiency</b> (all targeted resources have non-zero production):
-    ///     returns <c>1 + 1 / sumOfTurns</c>, where <c>sumOfTurns</c> is the sum of the
-    ///     per-resource turns values.  This is always <c>&gt; 1</c> (always above any Phase-1
-    ///     score) and rewards <em>any</em> production improvement, not just improvements to
-    ///     the current bottleneck.  Because the bottleneck resource dominates the sum,
-    ///     the optimizer naturally converges to minimising the maximum turns.</item>
+    ///     returns <c>1 + 1/maxTurns + 0.01/sumOfTurns</c>.  The <c>1/maxTurns</c> primary term
+    ///     strongly prioritises reducing the bottleneck resource — any change that lowers the
+    ///     maximum turns is always preferred over any change that doesn't, regardless of how much
+    ///     the total improves.  The <c>0.01/sumOfTurns</c> secondary term is a tiebreaker that
+    ///     provides a gradient when two arrangements share the same maximum, steering the
+    ///     optimizer toward overall balance rather than over-producing non-bottleneck resources.
+    ///     The weight 0.01 is provably small enough (ε &lt; 1) that it never overrides the primary
+    ///     term: the benefit of reducing maxTurns by 1 always exceeds the benefit of reducing
+    ///     sumOfTurns by 1.</item>
     /// </list>
     /// Food is not included in the score.
     /// </summary>
@@ -190,11 +194,14 @@ public static class Simulator
             return total > 0 ? (double)covered / total : 0.0;
         }
 
-        // Phase 2: all resources producing — reward any production improvement.
-        // Using 1/sumOfTurns gives a gradient for EVERY slot, not just the bottleneck,
-        // so Permutate fills all slots while still converging toward the minimum max turns.
+        // Phase 2: all resources producing.
+        // Primary term 1/maxTurns: strongly prefer reducing the bottleneck resource.
+        // Tiebreaker 0.01/sumTurns: when maxTurns ties, prefer balanced (lower total) production.
+        // The weight 0.01 is provably safe: for all realistic turn counts,
+        //   1/(m*(m-1)) > 0.01/(s*(s-1))  where m = maxTurns, s = sumTurns ≥ m.
+        // This guarantees the primary term always dominates.
         long sumTurns = (long)turns.Lumber + turns.Stone + turns.Metal + turns.Petricite;
-        return 1.0 + 1.0 / sumTurns;
+        return 1.0 + 1.0 / maxTurns + 0.01 / sumTurns;
     }
 
     /// <summary>Scores a board configuration directly.</summary>

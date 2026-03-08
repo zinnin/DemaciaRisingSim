@@ -10,5 +10,5 @@ public static class GameConstants
     public const int SettlementSlotCount = 6;
 
     // Optimization limits
-    public const int MaxOptimizationIterations = 50;
+    public const int MaxOptimizationIterations = 200;
 }

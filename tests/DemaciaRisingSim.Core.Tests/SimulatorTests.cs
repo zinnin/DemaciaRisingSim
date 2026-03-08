@@ -482,6 +482,61 @@ public class SimulatorTests
     }
 
     [Fact]
+    public void Score_BottleneckReduction_IsPreferredOverSumReduction()
+    {
+        // Reducing the bottleneck (max turns) must always score higher than an equal-sized
+        // reduction in a non-bottleneck resource, even if the non-bottleneck change
+        // produces a larger total-turns improvement.
+        //
+        // Scenario: stone is the bottleneck (88 turns), others are faster.
+        //   Board A: reduces stone 88→80 but increases lumber 67→75 (sum goes 294→287, max goes 88→80)
+        //   Board B: reduces lumber 67→50 and petricite 56→45 (sum goes 294→280, max stays 88)
+        // Board A must score higher because it reduces the max even though Board B reduces the sum more.
+        var settings = new SimulationSettings
+        {
+            LumberTarget    = 296_300,
+            StoneTarget     = 343_400,
+            MetalTarget     = 143_650,
+            PetriciteTarget =   1_450,
+        };
+        // Board A: max=80 (stone), sum=80+83+75+56=294 (lumber went up a bit, stone dropped)
+        // Produce exactly the right amounts to land on the desired turns:
+        // turns = ceil(target / production), so production = ceil(target / turns)
+        // stone   80 turns: 343400/80 = 4292.5 → need 4293 production  (ceil(343400/80)=4293)
+        // lumber  75 turns: 296300/75 = 3950.7 → need 3951
+        // metal   83 turns: 143650/83 = 1730.7 → need 1731
+        // Petricite 56: 1450/56 = 25.9 → need 26
+        var boardA = new ResourceOutput(Lumber: 3951, Stone: 4293, Metal: 1731, Petricite: 26);
+
+        // Board B: max=88 (stone), sum=88+83+50+45 (lumber+Petricite drop more but max unchanged)
+        // stone  88 turns: 343400/88 = 3902.3 → need 3903
+        // lumber 50 turns: 296300/50 = 5926   → need 5926
+        // metal  83 turns: 143650/83 = 1730.7 → need 1731
+        // Petricite 45: 1450/45 = 32.2 → need 33 (45 turns: ceil(1450/33)=44 < 45, try 32: ceil(1450/32)=46)
+        // Actually use turns directly: just create outputs that give exact turn values
+        // stone: 3903/turn → ceil(343400/3903)=88, lumber: 5927/turn → ceil(296300/5927)=50
+        // metal: 1731/turn → ceil(143650/1731)=83, Petricite: 33/turn → ceil(1450/33)=44
+        // Let's just use simple values that unambiguously land on the desired turns:
+        var boardB = new ResourceOutput(Lumber: 5927, Stone: 3903, Metal: 1731, Petricite: 33);
+
+        var turnsA = Simulator.TurnsToComplete(boardA, settings);
+        var turnsB = Simulator.TurnsToComplete(boardB, settings);
+
+        // Confirm Board A has a lower max
+        Assert.True(turnsA.Max < turnsB.Max,
+            $"Expected Board A max {turnsA.Max} < Board B max {turnsB.Max}");
+        // Confirm Board B has a lower sum (it's the foil: better sum but worse max)
+        long sumA = (long)turnsA.Lumber + turnsA.Stone + turnsA.Metal + turnsA.Petricite;
+        long sumB = (long)turnsB.Lumber + turnsB.Stone + turnsB.Metal + turnsB.Petricite;
+        Assert.True(sumB < sumA,
+            $"Expected Board B sum {sumB} < Board A sum {sumA} (foil condition)");
+
+        // Board A must score higher despite worse sum, because its max is lower.
+        Assert.True(Simulator.Score(boardA, settings) > Simulator.Score(boardB, settings),
+            $"Board A (max={turnsA.Max}, sum={sumA}) should outscore Board B (max={turnsB.Max}, sum={sumB})");
+    }
+
+    [Fact]
     public void Score_IsNonNegative()
     {
         var board = BoardData.CreateDefaultBoard();
