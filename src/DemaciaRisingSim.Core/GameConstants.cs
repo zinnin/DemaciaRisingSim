@@ -1,33 +1,25 @@
 namespace DemaciaRisingSim.Core;
 
 /// <summary>
-/// Game constants for tile production values, resource ratios, and building multipliers.
+/// Game constants used for score normalization, resource ratios, and optimization limits.
+/// Production values per structure level are defined in <see cref="StructureData"/>.
 /// </summary>
 public static class GameConstants
 {
-    // Base production per tile
-    public const int LumberTileValue = 150;
-    public const int StoneTileValue = 100;
-    public const int MetalTileValue = 50;
-    public const int PetriciteTileValue = 3;
-    public const int FarmTileValue = 5;
-    public const int HeartlandFarmBonusValue = 6; // first two farms on a heartland are worth 6
+    // Score normalization — max-level output values used to put resources on a common scale
+    public const int LumberTileValue   = 150;  // Lumberyard L4 output
+    public const int StoneTileValue    = 100;  // Quarry L4 output
+    public const int MetalTileValue    = 50;   // Forge L4 output
+    public const int PetriciteTileValue = 3;   // Petricite Mill L3 output
 
-    // Ideal resource ratios relative to lumber
-    public const double StoneRatio = 1.25;
-    public const double MetalRatio = 1.5;
+    // Ideal resource ratios relative to lumber (targets for the score function)
+    public const double StoneRatio     = 1.25;
+    public const double MetalRatio     = 1.5;
     public const double PetriciteRatio = 0.3;
 
-    // Multiplier bonuses per marketplace/academy tile
-    public const double MarketplaceMultiplier = 0.1;
-    public const double AcademyMultiplier = 0.1;
-
-    // Terrain production bonuses
-    public const int MountainStoneBonusTiles = 2;  // +2 stone tiles on mountain
-    public const int BorderMetalBonusTiles = 2;    // +2 metal tiles on border
-    public const double HeartlandLumberBonus = 0.25; // +25% lumber multiplier on heartland
+    // Board layout
+    public const int SettlementSlotCount = 6;
 
     // Optimization limits
-    public const int MaxNonProductiveBuildings = 3;
     public const int MaxOptimizationIterations = 50;
 }

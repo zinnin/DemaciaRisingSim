@@ -1,29 +1,37 @@
 namespace DemaciaRisingSim.Core;
 
 /// <summary>
-/// The type of production tile that can be placed in a city.
+/// The type of structure that can be placed in a settlement slot.
 /// </summary>
-public enum TileType
+public enum StructureType
 {
-    Lumber = 0,
-    Stone = 1,
-    Metal = 2,
-    Marketplace = 3,
-    Academy = 4,
-    Petricite = 5,
-    NonProductive = 6,
-    Farm = 7,
+    Empty = 0,
+    Lumberyard,
+    Farm,
+    Quarry,
+    Forge,
+    Academy,
+    Marketplace,
+    PetriciteMill,
+    Watchtower,
+    MilitiaHeadquarters,
+    Barracks,
+    Quartermaster,
+    ShrineOfVeiledLady,
+    DurandsWorkshop,
 }
 
 /// <summary>
-/// Terrain types that affect city production and tile restrictions.
+/// Environment types that affect settlement production and structure bonuses.
+/// Academy bonuses apply to Heartland, Mountain, and Border environments only.
 /// </summary>
 [Flags]
-public enum TerrainType
+public enum EnvironmentType
 {
     None = 0,
     Heartland = 1,
     Border = 2,
     Mountain = 4,
     Petricite = 8,
+    Woodland = 16,
 }

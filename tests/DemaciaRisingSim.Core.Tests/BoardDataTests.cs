@@ -5,90 +5,114 @@ namespace DemaciaRisingSim.Core.Tests;
 public class BoardDataTests
 {
     [Fact]
-    public void CreateDefaultBoard_Has16Cities()
+    public void CreateDefaultBoard_Has16Settlements()
     {
         var board = BoardData.CreateDefaultBoard();
         Assert.Equal(16, board.Count);
     }
 
     [Fact]
-    public void CreateDefaultBoard_AllCitiesHaveCorrectIds()
+    public void CreateDefaultBoard_AllSettlementsHaveCorrectNames()
     {
         var board = BoardData.CreateDefaultBoard();
-        var expected = new[] { "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P" };
-        foreach (var id in expected)
-            Assert.True(board.ContainsKey(id), $"Board should contain city {id}");
+        var expected = new[]
+        {
+            "The Great City", "Brookhollow", "Cloudfield", "Dawnhold", "Evenmoor",
+            "Fossbarrow", "Hawkstone", "Hayneath", "High Silvermere", "Jandelle",
+            "Meltridge", "Pinara", "Terbisia", "Tylburne", "Uwendale", "Vaskasia",
+        };
+        foreach (var name in expected)
+            Assert.True(board.ContainsKey(name), $"Board should contain settlement {name}");
     }
 
     [Fact]
-    public void CreateDefaultBoard_HeartlandCities_HaveSixTiles()
+    public void CreateDefaultBoard_AllSettlementsHaveSixSlots()
     {
         var board = BoardData.CreateDefaultBoard();
-        // Heartland cities: B, H, J, N, P (6 tiles each)
-        foreach (var id in new[] { "B", "H", "J", "P" })
-            Assert.Equal(6, board[id].Tiles.Length);
+        foreach (var settlement in board.Values)
+            Assert.Equal(GameConstants.SettlementSlotCount, settlement.Structures.Length);
     }
 
     [Fact]
-    public void CreateDefaultBoard_N_IsHeartlandAndPetricite()
+    public void CreateDefaultBoard_AllSlotsInitializedToLumberyardL1()
     {
         var board = BoardData.CreateDefaultBoard();
-        Assert.True(board["N"].Terrain.HasFlag(TerrainType.Heartland));
-        Assert.True(board["N"].Terrain.HasFlag(TerrainType.Petricite));
-        Assert.Equal(6, board["N"].Tiles.Length);
+        var expected = new Structure(StructureType.Lumberyard, 1);
+        foreach (var settlement in board.Values)
+            foreach (var structure in settlement.Structures)
+                Assert.Equal(expected, structure);
     }
 
     [Fact]
-    public void CreateDefaultBoard_PetriciteCities_AllowPetricite()
+    public void CreateDefaultBoard_TheGreatCity_IsCapital()
     {
         var board = BoardData.CreateDefaultBoard();
-        foreach (var id in new[] { "A", "D", "I", "N" })
-            Assert.True(board[id].AllowsPetricite, $"City {id} should allow petricite tiles");
+        Assert.True(board["The Great City"].IsCapital);
+        Assert.True(board["The Great City"].AllowsPetriciteMill);
     }
 
     [Fact]
-    public void CreateDefaultBoard_NonPetriciteCities_DoNotAllowPetricite()
+    public void CreateDefaultBoard_NonCapitalSettlements_DoNotAllowPetriciteMill()
     {
         var board = BoardData.CreateDefaultBoard();
-        foreach (var id in new[] { "B", "C", "E", "F", "G", "H", "J", "K", "L", "M", "O", "P" })
-            Assert.False(board[id].AllowsPetricite, $"City {id} should not allow petricite tiles");
+        foreach (var kv in board.Where(kv => kv.Key != "The Great City"))
+            Assert.False(kv.Value.AllowsPetriciteMill, $"Settlement {kv.Key} should not allow PetriciteMill");
     }
 
     [Fact]
-    public void CreateDefaultBoard_MountainCities_HaveCorrectTerrain()
+    public void CreateDefaultBoard_Tylburne_IsHeartlandAndPetricite()
     {
         var board = BoardData.CreateDefaultBoard();
-        foreach (var id in new[] { "E", "G", "L", "O" })
-            Assert.True(board[id].Terrain.HasFlag(TerrainType.Mountain), $"City {id} should be mountain terrain");
+        Assert.True(board["Tylburne"].Environment.HasFlag(EnvironmentType.Heartland));
+        Assert.True(board["Tylburne"].Environment.HasFlag(EnvironmentType.Petricite));
     }
 
     [Fact]
-    public void CreateDefaultBoard_BorderCities_HaveCorrectTerrain()
+    public void CreateDefaultBoard_MountainSettlements_HaveCorrectEnvironment()
     {
         var board = BoardData.CreateDefaultBoard();
-        foreach (var id in new[] { "C", "F", "K", "M" })
-            Assert.True(board[id].Terrain.HasFlag(TerrainType.Border), $"City {id} should be border terrain");
+        foreach (var name in new[] { "Evenmoor", "Hawkstone", "Pinara", "Uwendale" })
+            Assert.True(board[name].Environment.HasFlag(EnvironmentType.Mountain),
+                $"Settlement {name} should have Mountain environment");
+    }
+
+    [Fact]
+    public void CreateDefaultBoard_BorderSettlements_HaveCorrectEnvironment()
+    {
+        var board = BoardData.CreateDefaultBoard();
+        foreach (var name in new[] { "Cloudfield", "Fossbarrow", "Meltridge", "Terbisia" })
+            Assert.True(board[name].Environment.HasFlag(EnvironmentType.Border),
+                $"Settlement {name} should have Border environment");
+    }
+
+    [Fact]
+    public void CreateDefaultBoard_HeartlandSettlements_HaveCorrectEnvironment()
+    {
+        var board = BoardData.CreateDefaultBoard();
+        foreach (var name in new[] { "Brookhollow", "Hayneath", "Jandelle", "Vaskasia" })
+            Assert.True(board[name].Environment.HasFlag(EnvironmentType.Heartland),
+                $"Settlement {name} should have Heartland environment");
     }
 
     [Fact]
     public void CreateDefaultBoard_AllMultipliersStartAtOne()
     {
         var board = BoardData.CreateDefaultBoard();
-        foreach (var city in board.Values)
-            Assert.Equal(1.0, city.Multiplier);
+        foreach (var settlement in board.Values)
+            Assert.Equal(1.0, settlement.Multiplier);
     }
 
     [Fact]
     public void Clone_CreatesDeepCopy()
     {
         var board = BoardData.CreateDefaultBoard();
-        board["A"].Tiles[0] = TileType.Stone;
+        board["The Great City"].Structures[0] = new Structure(StructureType.Quarry, 2);
 
         var clone = BoardData.Clone(board);
-        Assert.Equal(TileType.Stone, clone["A"].Tiles[0]);
+        Assert.Equal(new Structure(StructureType.Quarry, 2), clone["The Great City"].Structures[0]);
 
         // Mutating original should not affect clone
-        board["A"].Tiles[0] = TileType.Metal;
-        Assert.Equal(TileType.Stone, clone["A"].Tiles[0]);
+        board["The Great City"].Structures[0] = new Structure(StructureType.Forge, 1);
+        Assert.Equal(new Structure(StructureType.Quarry, 2), clone["The Great City"].Structures[0]);
     }
 }

@@ -6,23 +6,24 @@ using DemaciaRisingSim.Core;
 namespace DemaciaRisingSim.UI;
 
 /// <summary>
-/// ViewModel for a single city row displayed in the board grid.
+/// ViewModel for a single settlement row displayed in the board grid.
 /// </summary>
-public class CityViewModel : INotifyPropertyChanged
+public class SettlementViewModel : INotifyPropertyChanged
 {
-    private string _tiles = string.Empty;
+    private string _structures = string.Empty;
     private int _lumber;
     private int _stone;
     private int _metal;
     private int _petricite;
+    private int _food;
 
-    public string CityId { get; set; } = string.Empty;
-    public string Terrain { get; set; } = string.Empty;
+    public string SettlementName { get; set; } = string.Empty;
+    public string Environment { get; set; } = string.Empty;
 
-    public string Tiles
+    public string Structures
     {
-        get => _tiles;
-        set { _tiles = value; OnPropertyChanged(); }
+        get => _structures;
+        set { _structures = value; OnPropertyChanged(); }
     }
 
     public int Lumber
@@ -49,6 +50,12 @@ public class CityViewModel : INotifyPropertyChanged
         set { _petricite = value; OnPropertyChanged(); }
     }
 
+    public int Food
+    {
+        get => _food;
+        set { _food = value; OnPropertyChanged(); }
+    }
+
     public event PropertyChangedEventHandler? PropertyChanged;
 
     protected void OnPropertyChanged([CallerMemberName] string? name = null)
@@ -56,7 +63,7 @@ public class CityViewModel : INotifyPropertyChanged
 }
 
 /// <summary>
-/// Main ViewModel driving the board visualization and simulation controls.
+/// Main ViewModel driving the board visualization, simulation controls, and settings.
 /// </summary>
 public class MainViewModel : INotifyPropertyChanged
 {
@@ -64,13 +71,20 @@ public class MainViewModel : INotifyPropertyChanged
     private string _totalStone = "0";
     private string _totalMetal = "0";
     private string _totalPetricite = "0";
+    private string _totalFood = "0";
     private string _score = "0";
     private string _statusMessage = "Ready. Click 'Load Default Board' to initialize the board, or 'Optimize' to find the best layout.";
     private bool _isBusy;
 
-    private Dictionary<string, City> _board;
+    // Settings
+    private bool _requireDurandsWorkshop = true;
+    private bool _requireShrineOfVeiledLady = true;
+    private bool _requireQuartermaster = true;
+    private int _maxBuildingLevel = 4;
 
-    public ObservableCollection<CityViewModel> Cities { get; } = [];
+    private Dictionary<string, Settlement> _board;
+
+    public ObservableCollection<SettlementViewModel> Settlements { get; } = [];
 
     public string TotalLumber
     {
@@ -96,6 +110,12 @@ public class MainViewModel : INotifyPropertyChanged
         set { _totalPetricite = value; OnPropertyChanged(); }
     }
 
+    public string TotalFood
+    {
+        get => _totalFood;
+        set { _totalFood = value; OnPropertyChanged(); }
+    }
+
     public string Score
     {
         get => _score;
@@ -114,6 +134,30 @@ public class MainViewModel : INotifyPropertyChanged
         set { _isBusy = value; OnPropertyChanged(); }
     }
 
+    public bool RequireDurandsWorkshop
+    {
+        get => _requireDurandsWorkshop;
+        set { _requireDurandsWorkshop = value; OnPropertyChanged(); }
+    }
+
+    public bool RequireShrineOfVeiledLady
+    {
+        get => _requireShrineOfVeiledLady;
+        set { _requireShrineOfVeiledLady = value; OnPropertyChanged(); }
+    }
+
+    public bool RequireQuartermaster
+    {
+        get => _requireQuartermaster;
+        set { _requireQuartermaster = value; OnPropertyChanged(); }
+    }
+
+    public int MaxBuildingLevel
+    {
+        get => _maxBuildingLevel;
+        set { _maxBuildingLevel = value; OnPropertyChanged(); }
+    }
+
     public MainViewModel()
     {
         _board = BoardData.CreateDefaultBoard();
@@ -125,7 +169,7 @@ public class MainViewModel : INotifyPropertyChanged
     {
         _board = BoardData.CreateDefaultBoard();
         LoadBoard(_board);
-        StatusMessage = "Default board loaded (all Lumber tiles).";
+        StatusMessage = "Default board loaded (all Lumberyard level 1).";
     }
 
     /// <summary>Runs optimization on the current board and updates the display.</summary>
@@ -135,8 +179,15 @@ public class MainViewModel : INotifyPropertyChanged
         StatusMessage = "Optimizing board layout…";
         try
         {
+            var settings = new SimulationSettings
+            {
+                RequireDurandsWorkshop  = RequireDurandsWorkshop,
+                RequireShrineOfVeiledLady = RequireShrineOfVeiledLady,
+                RequireQuartermaster    = RequireQuartermaster,
+                MaxBuildingLevel        = MaxBuildingLevel,
+            };
             var boardToOptimize = BoardData.Clone(_board);
-            var optimized = await Task.Run(() => Simulator.OptimizeBoard(boardToOptimize));
+            var optimized = await Task.Run(() => Simulator.OptimizeBoard(boardToOptimize, settings));
             _board = optimized;
             LoadBoard(_board);
             StatusMessage = $"Optimization complete. Score: {Simulator.Score(_board):F4}";
@@ -147,38 +198,40 @@ public class MainViewModel : INotifyPropertyChanged
         }
     }
 
-    private void LoadBoard(Dictionary<string, City> board)
+    private void LoadBoard(Dictionary<string, Settlement> board)
     {
-        Cities.Clear();
+        Settlements.Clear();
 
         foreach (var kv in board)
         {
-            var city = kv.Value;
-            var output = Simulator.CityOutput(city);
+            var settlement = kv.Value;
+            var output = Simulator.SettlementOutput(settlement);
 
-            Cities.Add(new CityViewModel
+            Settlements.Add(new SettlementViewModel
             {
-                CityId = city.Id,
-                Terrain = city.Terrain.ToString(),
-                Tiles = string.Join(", ", city.Tiles.Select(t => t.ToString())),
-                Lumber = output.Lumber,
-                Stone = output.Stone,
-                Metal = output.Metal,
-                Petricite = output.Petricite,
+                SettlementName = settlement.Name,
+                Environment    = settlement.Environment.ToString(),
+                Structures     = string.Join(", ", settlement.Structures.Select(s => s.ToString())),
+                Lumber         = output.Lumber,
+                Stone          = output.Stone,
+                Metal          = output.Metal,
+                Petricite      = output.Petricite,
+                Food           = output.Food,
             });
         }
 
         UpdateTotals(board);
     }
 
-    private void UpdateTotals(Dictionary<string, City> board)
+    private void UpdateTotals(Dictionary<string, Settlement> board)
     {
         var total = Simulator.BoardOutput(board);
-        TotalLumber = total.Lumber.ToString();
-        TotalStone = total.Stone.ToString();
-        TotalMetal = total.Metal.ToString();
+        TotalLumber    = total.Lumber.ToString();
+        TotalStone     = total.Stone.ToString();
+        TotalMetal     = total.Metal.ToString();
         TotalPetricite = total.Petricite.ToString();
-        Score = Simulator.Score(total).ToString("F4");
+        TotalFood      = total.Food.ToString();
+        Score          = Simulator.Score(total).ToString("F4");
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
