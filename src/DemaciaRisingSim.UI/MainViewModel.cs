@@ -72,7 +72,11 @@ public class MainViewModel : INotifyPropertyChanged
     private string _totalMetal = "0";
     private string _totalPetricite = "0";
     private string _totalFood = "0";
-    private string _score = "0";
+    private string _turnsLumber = "—";
+    private string _turnsStone = "—";
+    private string _turnsMetal = "—";
+    private string _turnsPetricite = "—";
+    private string _maxTurns = "—";
     private string _statusMessage = "Ready. Click 'Load Default Board' to initialize the board, or 'Optimize' to find the best layout.";
     private bool _isBusy;
 
@@ -82,6 +86,12 @@ public class MainViewModel : INotifyPropertyChanged
     private bool _requireQuartermaster = true;
     private int _maxBuildingLevel = 4;
     private int _foodTargetPerSettlement = 2;
+
+    // Resource targets
+    private int _lumberTarget    = 296_300;
+    private int _stoneTarget     = 343_400;
+    private int _metalTarget     = 143_650;
+    private int _petriciteTarget = 1_450;
 
     private Dictionary<string, Settlement> _board;
 
@@ -117,10 +127,34 @@ public class MainViewModel : INotifyPropertyChanged
         set { _totalFood = value; OnPropertyChanged(); }
     }
 
-    public string Score
+    public string TurnsLumber
     {
-        get => _score;
-        set { _score = value; OnPropertyChanged(); }
+        get => _turnsLumber;
+        set { _turnsLumber = value; OnPropertyChanged(); }
+    }
+
+    public string TurnsStone
+    {
+        get => _turnsStone;
+        set { _turnsStone = value; OnPropertyChanged(); }
+    }
+
+    public string TurnsMetal
+    {
+        get => _turnsMetal;
+        set { _turnsMetal = value; OnPropertyChanged(); }
+    }
+
+    public string TurnsPetricite
+    {
+        get => _turnsPetricite;
+        set { _turnsPetricite = value; OnPropertyChanged(); }
+    }
+
+    public string MaxTurns
+    {
+        get => _maxTurns;
+        set { _maxTurns = value; OnPropertyChanged(); }
     }
 
     public string StatusMessage
@@ -165,6 +199,30 @@ public class MainViewModel : INotifyPropertyChanged
         set { _foodTargetPerSettlement = Math.Max(0, value); OnPropertyChanged(); }
     }
 
+    public int LumberTarget
+    {
+        get => _lumberTarget;
+        set { _lumberTarget = Math.Max(0, value); OnPropertyChanged(); }
+    }
+
+    public int StoneTarget
+    {
+        get => _stoneTarget;
+        set { _stoneTarget = Math.Max(0, value); OnPropertyChanged(); }
+    }
+
+    public int MetalTarget
+    {
+        get => _metalTarget;
+        set { _metalTarget = Math.Max(0, value); OnPropertyChanged(); }
+    }
+
+    public int PetriciteTarget
+    {
+        get => _petriciteTarget;
+        set { _petriciteTarget = Math.Max(0, value); OnPropertyChanged(); }
+    }
+
     public MainViewModel()
     {
         _board = BoardData.CreateDefaultBoard();
@@ -188,17 +246,22 @@ public class MainViewModel : INotifyPropertyChanged
         {
             var settings = new SimulationSettings
             {
-                RequireDurandsWorkshop  = RequireDurandsWorkshop,
+                RequireDurandsWorkshop    = RequireDurandsWorkshop,
                 RequireShrineOfVeiledLady = RequireShrineOfVeiledLady,
-                RequireQuartermaster    = RequireQuartermaster,
-                MaxBuildingLevel        = MaxBuildingLevel,
-                FoodTargetPerSettlement = FoodTargetPerSettlement,
+                RequireQuartermaster      = RequireQuartermaster,
+                MaxBuildingLevel          = MaxBuildingLevel,
+                FoodTargetPerSettlement   = FoodTargetPerSettlement,
+                LumberTarget              = LumberTarget,
+                StoneTarget               = StoneTarget,
+                MetalTarget               = MetalTarget,
+                PetriciteTarget           = PetriciteTarget,
             };
             var boardToOptimize = BoardData.Clone(_board);
             var optimized = await Task.Run(() => Simulator.OptimizeBoard(boardToOptimize, settings));
             _board = optimized;
-            LoadBoard(_board);
-            StatusMessage = $"Optimization complete. Score: {Simulator.Score(_board):F4}";
+            LoadBoard(_board, settings);
+            var turns = Simulator.TurnsToComplete(Simulator.BoardOutput(_board), settings);
+            StatusMessage = $"Optimization complete. Max turns to complete: {TurnsBreakdown.Format(turns.Max)}";
         }
         finally
         {
@@ -206,7 +269,7 @@ public class MainViewModel : INotifyPropertyChanged
         }
     }
 
-    private void LoadBoard(Dictionary<string, Settlement> board)
+    private void LoadBoard(Dictionary<string, Settlement> board, SimulationSettings? settings = null)
     {
         Settlements.Clear();
 
@@ -228,18 +291,33 @@ public class MainViewModel : INotifyPropertyChanged
             });
         }
 
-        UpdateTotals(board);
+        UpdateTotals(board, settings);
     }
 
-    private void UpdateTotals(Dictionary<string, Settlement> board)
+    private void UpdateTotals(Dictionary<string, Settlement> board, SimulationSettings? settings = null)
     {
+        // Build a settings instance from current UI values if none provided.
+        settings ??= new SimulationSettings
+        {
+            LumberTarget    = LumberTarget,
+            StoneTarget     = StoneTarget,
+            MetalTarget     = MetalTarget,
+            PetriciteTarget = PetriciteTarget,
+        };
+
         var total = Simulator.BoardOutput(board);
         TotalLumber    = total.Lumber.ToString();
         TotalStone     = total.Stone.ToString();
         TotalMetal     = total.Metal.ToString();
         TotalPetricite = total.Petricite.ToString();
         TotalFood      = total.Food.ToString();
-        Score          = Simulator.Score(total).ToString("F4");
+
+        var turns = Simulator.TurnsToComplete(total, settings);
+        TurnsLumber    = TurnsBreakdown.Format(turns.Lumber);
+        TurnsStone     = TurnsBreakdown.Format(turns.Stone);
+        TurnsMetal     = TurnsBreakdown.Format(turns.Metal);
+        TurnsPetricite = TurnsBreakdown.Format(turns.Petricite);
+        MaxTurns       = TurnsBreakdown.Format(turns.Max);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

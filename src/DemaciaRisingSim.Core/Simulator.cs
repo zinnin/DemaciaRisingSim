@@ -120,33 +120,93 @@ public static class Simulator
     }
 
     /// <summary>
-    /// Generates a single numeric score for a board's resource output.
-    /// Higher is better. Rewards balanced production matching the ideal ratios.
+    /// Returns the number of turns needed to accumulate <paramref name="target"/> of a resource
+    /// given <paramref name="production"/> per turn.
+    /// Returns 0 when the target is 0 (already met), and <see cref="int.MaxValue"/> when
+    /// production is 0 but the target is non-zero (unreachable).
+    /// </summary>
+    private static int TurnsForResource(int production, int target)
+    {
+        if (target <= 0)       return 0;
+        if (production <= 0)   return int.MaxValue;
+        return (target + production - 1) / production;
+    }
+
+    /// <summary>
+    /// Calculates the number of turns required to accumulate each resource target given the
+    /// board's per-turn output. A value of <see cref="int.MaxValue"/> indicates zero production
+    /// for a resource that has a non-zero target.
+    /// </summary>
+    public static TurnsBreakdown TurnsToComplete(ResourceOutput output, SimulationSettings? settings = null)
+    {
+        settings ??= new SimulationSettings();
+        return new TurnsBreakdown(
+            Lumber:    TurnsForResource(output.Lumber,    settings.LumberTarget),
+            Stone:     TurnsForResource(output.Stone,     settings.StoneTarget),
+            Metal:     TurnsForResource(output.Metal,     settings.MetalTarget),
+            Petricite: TurnsForResource(output.Petricite, settings.PetriciteTarget));
+    }
+
+    /// <summary>
+    /// Generates a single numeric score for a board's resource output given the provided
+    /// resource targets. Higher is better.
+    /// <para>
+    /// Scoring uses two phases so that <see cref="Permutate"/> can make incremental progress
+    /// from any board state, including the sparse board produced by <see cref="SmartAllocateBoard"/>:
+    /// </para>
+    /// <list type="bullet">
+    ///   <item><b>Phase 1 — coverage</b> (any targeted resource has zero production):
+    ///     returns <c>covered / total</c> in <c>[0, 1)</c>, where <c>covered</c> is the number
+    ///     of targeted resources that have at least 1 unit of production.  This provides a
+    ///     gradient that rewards adding a new resource type even when others are still missing.</item>
+    ///   <item><b>Phase 2 — efficiency</b> (all targeted resources have non-zero production):
+    ///     returns <c>1 + 1/maxTurns + 0.01/sumOfTurns</c>.  The <c>1/maxTurns</c> primary term
+    ///     strongly prioritises reducing the bottleneck resource — any change that lowers the
+    ///     maximum turns is always preferred over any change that doesn't, regardless of how much
+    ///     the total improves.  The <c>0.01/sumOfTurns</c> secondary term is a tiebreaker that
+    ///     provides a gradient when two arrangements share the same maximum, steering the
+    ///     optimizer toward overall balance rather than over-producing non-bottleneck resources.
+    ///     The weight 0.01 is provably small enough (ε < 1) that it never overrides the primary
+    ///     term: the benefit of reducing maxTurns by 1 always exceeds the benefit of reducing
+    ///     sumOfTurns by 1.</item>
+    /// </list>
     /// Food is not included in the score.
     /// </summary>
-    public static double Score(ResourceOutput output)
+    public static double Score(ResourceOutput output, SimulationSettings? settings = null)
     {
-        if (output.Lumber == 0) return 0;
+        settings ??= new SimulationSettings();
+        var turns    = TurnsToComplete(output, settings);
+        int maxTurns = turns.Max;
 
-        double realLumber    = (double)output.Lumber    / GameConstants.LumberTileValue;
-        double realStone     = (double)output.Stone     / GameConstants.StoneTileValue;
-        double realMetal     = (double)output.Metal     / GameConstants.MetalTileValue;
-        double realPetricite = (double)output.Petricite / GameConstants.PetriciteTileValue;
+        // All targets already met (or all targets are 0).
+        if (maxTurns == 0) return 1e10;
 
-        double stoneRelative     = realStone     / realLumber;
-        double metalRelative     = realMetal     / realLumber;
-        double petriciteRelative = realPetricite / realLumber;
+        // Phase 1: at least one targeted resource has zero production.
+        // Return a fractional coverage score in [0, 1) to guide the optimizer toward
+        // filling all resource types before worrying about quantities.
+        if (maxTurns == int.MaxValue)
+        {
+            int covered = 0, total = 0;
+            if (settings.LumberTarget    > 0) { total++; if (output.Lumber    > 0) covered++; }
+            if (settings.StoneTarget     > 0) { total++; if (output.Stone     > 0) covered++; }
+            if (settings.MetalTarget     > 0) { total++; if (output.Metal     > 0) covered++; }
+            if (settings.PetriciteTarget > 0) { total++; if (output.Petricite > 0) covered++; }
+            return total > 0 ? (double)covered / total : 0.0;
+        }
 
-        double ratioPenalty = Math.Exp(-1.0 * (
-            Math.Pow((Math.Abs(stoneRelative     - GameConstants.StoneRatio)     / GameConstants.StoneRatio),     2) +
-            Math.Pow((Math.Abs(metalRelative     - GameConstants.MetalRatio)     / GameConstants.MetalRatio),     2) +
-            Math.Pow((Math.Abs(petriciteRelative - GameConstants.PetriciteRatio) / GameConstants.PetriciteRatio), 2)));
-
-        return (realLumber + realStone + realMetal + realPetricite) * ratioPenalty;
+        // Phase 2: all resources producing.
+        // Primary term 1/maxTurns: strongly prefer reducing the bottleneck resource.
+        // Tiebreaker 0.01/sumTurns: when maxTurns ties, prefer balanced (lower total) production.
+        // The weight 0.01 is provably safe: for all realistic turn counts,
+        //   1/(m*(m-1)) > 0.01/(s*(s-1))  where m = maxTurns, s = sumTurns ≥ m.
+        // This guarantees the primary term always dominates.
+        long sumTurns = (long)turns.Lumber + turns.Stone + turns.Metal + turns.Petricite;
+        return 1.0 + 1.0 / maxTurns + 0.01 / sumTurns;
     }
 
     /// <summary>Scores a board configuration directly.</summary>
-    public static double Score(Dictionary<string, Settlement> board) => Score(BoardOutput(board));
+    public static double Score(Dictionary<string, Settlement> board, SimulationSettings? settings = null)
+        => Score(BoardOutput(board), settings);
 
     /// <summary>
     /// Performs one pass over every optimizable slot on the board, trying each valid
@@ -161,7 +221,7 @@ public static class Simulator
         fixedSlots ??= [];
 
         var current   = BoardData.Clone(board);
-        double highScore = Score(current);
+        double highScore = Score(current, settings);
 
         foreach (var settlementName in current.Keys.ToList())
         {
@@ -176,10 +236,26 @@ public static class Simulator
 
                 var originalStructure = settlement.Structures[slotIndex];
 
+                // Pre-compute which unique structure types already occupy a different slot on the
+                // committed board. Checked once per slot (not per candidate) for efficiency.
+                var presentUniqueElsewhere = new HashSet<StructureType>();
+                foreach (var s in board.Values)
+                    for (int i = 0; i < s.Structures.Length; i++)
+                    {
+                        if (s.Name == settlementName && i == slotIndex) continue;
+                        if (UniqueStructureTypes.Contains(s.Structures[i].Type))
+                            presentUniqueElsewhere.Add(s.Structures[i].Type);
+                    }
+
                 foreach (var candidate in candidates)
                 {
+                    // Unique structures may appear at most once on the board.
+                    if (candidate.Type != StructureType.Empty &&
+                        presentUniqueElsewhere.Contains(candidate.Type))
+                        continue;
+
                     settlement.Structures[slotIndex] = candidate;
-                    double candidateScore = Score(current);
+                    double candidateScore = Score(current, settings);
                     if (candidateScore > highScore)
                     {
                         highScore = candidateScore;
@@ -206,9 +282,11 @@ public static class Simulator
     ///         and only placing a buff structure where the influenced-slot count exceeds the
     ///         break-even threshold (1 / multiplier_at_max_level).</item>
     ///   <item>Places required structures (Durand's Workshop, Shrine, Quartermaster) in the
-    ///         globally lowest-value remaining slots.</item>
-    ///   <item>Meets the per-settlement food target by placing Farms in each settlement's
-    ///         lowest-value remaining slots.</item>
+    ///         globally lowest-value remaining slots, preferring settlements with few connections
+    ///         and low Academy coverage over high-value terrain or capital slots.</item>
+    ///   <item>Meets the per-settlement food target by placing Farms in each non-capital
+    ///         settlement's lowest-value remaining slots. The capital is exempt because its
+    ///         slots are more valuable as PetriciteMills than as farms.</item>
     ///   <item>Leaves all other slots empty for further optimization via <see cref="Permutate"/>.</item>
     /// </list>
     /// </summary>
@@ -286,7 +364,7 @@ public static class Simulator
             for (int i = 0; i < s.Structures.Length; i++)
             {
                 if (s.Structures[i].Type == StructureType.Empty)
-                    allSlots.Add((s.Name, i, ComputeSlotValue(s, i, maxLevel)));
+                    allSlots.Add((s.Name, i, ComputeSlotValue(s, i, maxLevel, settings)));
             }
         }
         var sortedByValue = allSlots.OrderBy(x => x.Value).ToList();
@@ -311,33 +389,57 @@ public static class Simulator
             usedSlotSet.Add((name, slot));
         }
 
-        // --- Step 7: Meet the per-settlement food target using lowest-value remaining slots ---
+        // --- Step 7: Meet the global food target using the fewest possible farm slots ---
+        // FoodTargetPerSettlement × eligible-settlement-count gives the total food goal.
+        // Farm L4 (maxLevel) is used everywhere so each slot provides the most food possible
+        // (5 food in a normal settlement, 6 in Heartland on the first two farms).
+        // Farms are placed in the globally cheapest available slots first and stop as soon
+        // as the total food across all eligible settlements reaches the target.  This ensures
+        // no more farm slots are consumed than necessary, leaving surplus slots for the
+        // production structures that actually drive the turn count.
+        // The capital is exempt: its slots are reserved for PetriciteMills.
         if (settings.FoodTargetPerSettlement > 0)
         {
             // Farm structures go up to level 4 (unlike buff structures which cap at 3).
-            int farmLevel = Math.Min(4, maxLevel);
-            foreach (var s in work.Values)
+            int maxFarmLevel = Math.Min(4, maxLevel);
+
+            // Determine eligible settlements (non-capital, non-locked).
+            var eligibleSettlements = work.Values
+                .Where(s => !settings.LockedSettlements.Contains(s.Name) && !s.AllowsPetriciteMill)
+                .ToList();
+
+            int totalFoodTarget = settings.FoodTargetPerSettlement * eligibleSettlements.Count;
+
+            // Current food already present across all eligible settlements.
+            int currentFood = eligibleSettlements.Sum(s => SettlementOutput(s).Food);
+
+            if (currentFood < totalFoodTarget)
             {
-                if (settings.LockedSettlements.Contains(s.Name)) continue;
-
-                int foodNeeded = settings.FoodTargetPerSettlement - SettlementOutput(s).Food;
-                if (foodNeeded <= 0) continue;
-
-                // This settlement's empty slots, still sorted by value ascending.
-                var settlSlots = sortedByValue
-                    .Where(sv => sv.Name == s.Name && !usedSlotSet.Contains((sv.Name, sv.Slot)))
+                // Cheapest slots globally across all eligible settlements.
+                var globalFarmSlots = sortedByValue
+                    .Where(sv =>
+                    {
+                        if (!work.TryGetValue(sv.Name, out var s)) return false;
+                        if (settings.LockedSettlements.Contains(s.Name)) return false;
+                        if (s.AllowsPetriciteMill) return false;
+                        return !usedSlotSet.Contains((sv.Name, sv.Slot));
+                    })
                     .ToList();
 
-                foreach (var (name, slot, _) in settlSlots)
+                foreach (var (name, slot, _) in globalFarmSlots)
                 {
-                    if (foodNeeded <= 0) break;
+                    if (currentFood >= totalFoodTarget) break;
 
-                    s.Structures[slot] = new Structure(StructureType.Farm, farmLevel);
+                    var s = work[name];
+                    // Capture food before placement so the Heartland bonus on subsequent
+                    // farms in the same settlement is computed correctly via SettlementOutput.
+                    int foodBefore = SettlementOutput(s).Food;
+                    s.Structures[slot] = new Structure(StructureType.Farm, maxFarmLevel);
+                    // SettlementOutput re-evaluates the settlement (6 structure slots) so the
+                    // Heartland +1 bonus on the first two farms is always counted accurately.
+                    currentFood += SettlementOutput(s).Food - foodBefore;
                     fixedSlots.Add((name, slot));
                     usedSlotSet.Add((name, slot));
-
-                    // Recompute food after each farm placement (accounts for Heartland bonuses).
-                    foodNeeded = settings.FoodTargetPerSettlement - SettlementOutput(s).Food;
                 }
             }
         }
@@ -378,11 +480,14 @@ public static class Simulator
     }
 
     /// <summary>
-    /// Generates a formatted summary of a board's structure layout and production output.
+    /// Generates a formatted summary of a board's structure layout, per-turn production output,
+    /// and the number of turns required to accumulate each resource target.
     /// </summary>
-    public static string FullReport(Dictionary<string, Settlement> board)
+    public static string FullReport(Dictionary<string, Settlement> board, SimulationSettings? settings = null)
     {
+        settings ??= new SimulationSettings();
         var output = BoardOutput(board);
+        var turns  = TurnsToComplete(output, settings);
         var sb = new System.Text.StringBuilder();
 
         sb.AppendLine("Board Layout:");
@@ -393,35 +498,28 @@ public static class Simulator
         }
 
         sb.AppendLine();
-        sb.AppendLine($"Total Production: {output}");
+        sb.AppendLine($"Total Production (per turn): {output}");
+
         sb.AppendLine();
-
-        double realLumber    = (double)output.Lumber    / GameConstants.LumberTileValue;
-        double realStone     = (double)output.Stone     / GameConstants.StoneTileValue;
-        double realMetal     = (double)output.Metal     / GameConstants.MetalTileValue;
-        double realPetricite = (double)output.Petricite / GameConstants.PetriciteTileValue;
-
-        sb.AppendLine("Adjusted Output (in structure-equivalents):");
-        sb.AppendLine($"  Lumber:    {realLumber:F4}");
-        sb.AppendLine($"  Stone:     {realStone:F4}");
-        sb.AppendLine($"  Metal:     {realMetal:F4}");
-        sb.AppendLine($"  Petricite: {realPetricite:F4}");
+        sb.AppendLine("Turns to hit targets:");
+        sb.AppendLine($"  Lumber:    {TurnsBreakdown.Format(turns.Lumber),6}  (target: {settings.LumberTarget})");
+        sb.AppendLine($"  Stone:     {TurnsBreakdown.Format(turns.Stone),6}  (target: {settings.StoneTarget})");
+        sb.AppendLine($"  Metal:     {TurnsBreakdown.Format(turns.Metal),6}  (target: {settings.MetalTarget})");
+        sb.AppendLine($"  Petricite: {TurnsBreakdown.Format(turns.Petricite),6}  (target: {settings.PetriciteTarget})");
         sb.AppendLine($"  Food:      {output.Food}");
-
-        if (realLumber > 0)
-        {
-            sb.AppendLine();
-            sb.AppendLine("Ratios (relative to lumber):");
-            sb.AppendLine($"  Stone:     {realStone / realLumber:F4} (target: {GameConstants.StoneRatio})");
-            sb.AppendLine($"  Metal:     {realMetal / realLumber:F4} (target: {GameConstants.MetalRatio})");
-            sb.AppendLine($"  Petricite: {realPetricite / realLumber:F4} (target: {GameConstants.PetriciteRatio})");
-        }
-
         sb.AppendLine();
-        sb.AppendLine($"Score: {Score(output):F6}");
+        sb.AppendLine($"Max Turns: {TurnsBreakdown.Format(turns.Max)}");
 
         return sb.ToString();
     }
+
+    // Structure types that may appear at most once on the entire board.
+    private static readonly HashSet<StructureType> UniqueStructureTypes =
+    [
+        StructureType.DurandsWorkshop,
+        StructureType.ShrineOfVeiledLady,
+        StructureType.Quartermaster,
+    ];
 
     // -------------------------------------------------------------------------
     // Private helpers
@@ -470,37 +568,60 @@ public static class Simulator
     }
 
     /// <summary>
-    /// Estimates the production opportunity cost for a slot: the normalized output value
+    /// Estimates the production opportunity cost for a slot: the normalised output value
     /// of the best production structure that could be placed in this slot, accounting for
     /// terrain bonuses already claimed by earlier slots and the settlement's multiplier.
+    /// <para>
+    /// When <paramref name="settings"/> are supplied, each resource is normalised by its
+    /// accumulation <em>target</em> (progress per turn per slot) so that scarce / bottleneck
+    /// resources — such as Petricite, whose target is much smaller than Lumber — are correctly
+    /// ranked as more expensive to give up.  This ensures that required structures and food
+    /// farms are placed in the slots of settlements that have the fewest connections and the
+    /// least Academy coverage (i.e., where a production structure would contribute least).
+    /// Without settings the method falls back to max-production normalisation.
+    /// </para>
     /// </summary>
-    private static double ComputeSlotValue(Settlement settlement, int slotIndex, int maxLevel)
+    private static double ComputeSlotValue(Settlement settlement, int slotIndex, int maxLevel,
+        SimulationSettings? settings = null)
     {
         int effectiveLevel = Math.Max(1, Math.Min(4, maxLevel));
 
+        // Normalise by resource target (units of "progress per slot per turn") when targets
+        // are provided, so bottleneck resources weigh proportionally more than plentiful ones.
+        // Fall back to max level-4 production when no targets are set.
+        double lumberDenom = settings?.LumberTarget    > 0 ? settings.LumberTarget    : (double)StructureData.Get(StructureType.Lumberyard, 4).LumberOutput;
+        double stoneDenom  = settings?.StoneTarget     > 0 ? settings.StoneTarget     : (double)StructureData.Get(StructureType.Quarry,     4).StoneOutput;
+        double metalDenom  = settings?.MetalTarget     > 0 ? settings.MetalTarget     : (double)StructureData.Get(StructureType.Forge,      4).MetalOutput;
+
         // Lumberyard value (always available everywhere)
-        double lumberVal = (double)StructureData.Get(StructureType.Lumberyard, effectiveLevel).LumberOutput
-                           / GameConstants.LumberTileValue;
+        double lumberVal = StructureData.Get(StructureType.Lumberyard, effectiveLevel).LumberOutput / lumberDenom;
         if (settlement.Environment.HasFlag(EnvironmentType.Woodland))
             lumberVal *= 1.25;
 
         // Quarry value: first Quarry in a Mountain settlement earns the terrain double
         bool hasPriorQuarry = settlement.Environment.HasFlag(EnvironmentType.Mountain) &&
                               settlement.Structures.Take(slotIndex).Any(s => s.Type == StructureType.Quarry);
-        double stoneVal = (double)StructureData.Get(StructureType.Quarry, effectiveLevel).StoneOutput
-                          / GameConstants.StoneTileValue;
+        double stoneVal = StructureData.Get(StructureType.Quarry, effectiveLevel).StoneOutput / stoneDenom;
         if (settlement.Environment.HasFlag(EnvironmentType.Mountain) && !hasPriorQuarry)
             stoneVal *= 2.0;
 
         // Forge value: first Forge in a Border settlement earns the terrain double
         bool hasPriorForge = settlement.Environment.HasFlag(EnvironmentType.Border) &&
                              settlement.Structures.Take(slotIndex).Any(s => s.Type == StructureType.Forge);
-        double metalVal = (double)StructureData.Get(StructureType.Forge, effectiveLevel).MetalOutput
-                          / GameConstants.MetalTileValue;
+        double metalVal = StructureData.Get(StructureType.Forge, effectiveLevel).MetalOutput / metalDenom;
         if (settlement.Environment.HasFlag(EnvironmentType.Border) && !hasPriorForge)
             metalVal *= 2.0;
 
-        double best = Math.Max(lumberVal, Math.Max(stoneVal, metalVal));
+        // PetriciteMill value: available only in the capital settlement
+        double petriciteVal = 0;
+        if (settlement.AllowsPetriciteMill)
+        {
+            double petDenom = settings?.PetriciteTarget > 0 ? settings.PetriciteTarget : (double)StructureData.Get(StructureType.PetriciteMill, 3).PetriciteOutput;
+            int millLevel = Math.Max(1, Math.Min(3, maxLevel));
+            petriciteVal = StructureData.Get(StructureType.PetriciteMill, millLevel).PetriciteOutput / petDenom;
+        }
+
+        double best = Math.Max(lumberVal, Math.Max(stoneVal, Math.Max(metalVal, petriciteVal)));
         return best * settlement.Multiplier;
     }
 

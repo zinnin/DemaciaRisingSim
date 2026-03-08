@@ -219,7 +219,8 @@ public static class StructureData
             CostLumber: 500, CostStone: 1250, CostMetal: 0, CostPetricite: 0, BuildTurns: 5));
 
         // --- Petricite Mill (3 levels, Capital only) ---
-        // Produces Petricite every turn; can only be constructed in the Capital settlement.
+        // Produces Petricite every turn; can only be constructed in the Capital settlement,
+        // but multiple Petricite Mills may be built there.
         Add(new(StructureType.PetriciteMill, 1,
             LumberOutput: 0, StoneOutput: 0, MetalOutput: 0, PetriciteOutput: 1, FoodOutput: 0,
             MarketplaceMultiplier: 0, AcademyMultiplier: 0,

@@ -6,20 +6,20 @@ namespace DemaciaRisingSim.Core;
 public class SimulationSettings
 {
     /// <summary>
-    /// When true the optimizer reserves a slot in The Great City for Durand's Workshop
-    /// (produces 1 Petricite/turn). Default: true.
+    /// When true the optimizer places Durand's Workshop (produces 1 Petricite/turn) in the
+    /// globally lowest-value slot on the board. Default: true.
     /// </summary>
     public bool RequireDurandsWorkshop { get; set; } = true;
 
     /// <summary>
-    /// When true the optimizer reserves a slot in The Great City for the Shrine of the
-    /// Veiled Lady (kingdom-wide damage reduction). Default: true.
+    /// When true the optimizer places the Shrine of the Veiled Lady (kingdom-wide damage
+    /// reduction) in the globally lowest-value slot on the board. Default: true.
     /// </summary>
     public bool RequireShrineOfVeiledLady { get; set; } = true;
 
     /// <summary>
-    /// When true the optimizer reserves a slot in High Silvermere for a Quartermaster
-    /// (25% combat damage boost to this and neighboring settlements). Default: true.
+    /// When true the optimizer places a Quartermaster (25% combat damage boost to this and
+    /// neighboring settlements) in the globally lowest-value slot on the board. Default: true.
     /// </summary>
     public bool RequireQuartermaster { get; set; } = true;
 
@@ -41,4 +41,16 @@ public class SimulationSettings
     /// slots are filled with production structures. Default: 2.
     /// </summary>
     public int FoodTargetPerSettlement { get; set; } = 2;
+
+    /// <summary>Total Lumber the player needs to accumulate. Default: 296 300.</summary>
+    public int LumberTarget { get; set; } = 296_300;
+
+    /// <summary>Total Stone the player needs to accumulate. Default: 343 400.</summary>
+    public int StoneTarget { get; set; } = 343_400;
+
+    /// <summary>Total Metal the player needs to accumulate. Default: 143 650.</summary>
+    public int MetalTarget { get; set; } = 143_650;
+
+    /// <summary>Total Petricite the player needs to accumulate. Default: 1 450.</summary>
+    public int PetriciteTarget { get; set; } = 1_450;
 }

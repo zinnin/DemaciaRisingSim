@@ -35,8 +35,22 @@ public class SimulatorTests
     [Fact]
     public void StructureData_PetriciteMill_IsCapitalOnly()
     {
+        // PetriciteMill can only be placed in the capital (multiple are allowed).
         for (int level = 1; level <= 3; level++)
             Assert.True(StructureData.Get(StructureType.PetriciteMill, level).CapitalOnly);
+    }
+
+    [Fact]
+    public void Settlement_AllowsPetriciteMill_CapitalOnly()
+    {
+        // Only the capital may build PetriciteMills, regardless of terrain.
+        var capital      = new Settlement("Cap",      EnvironmentType.Petricite, isCapital: true);
+        var petricite    = new Settlement("Dawnhold", EnvironmentType.Petricite | EnvironmentType.Border);
+        var nonCapital   = new Settlement("Other",    EnvironmentType.Heartland);
+
+        Assert.True(capital.AllowsPetriciteMill,    "Capital should allow PetriciteMill");
+        Assert.False(petricite.AllowsPetriciteMill,  "Non-capital Petricite settlement should not allow PetriciteMill");
+        Assert.False(nonCapital.AllowsPetriciteMill, "Non-capital settlement should not allow PetriciteMill");
     }
 
     [Fact]
@@ -407,27 +421,113 @@ public class SimulatorTests
     }
 
     [Fact]
-    public void Score_ZeroLumber_ReturnsZero()
+    public void Score_ZeroProduction_ReturnsZero()
     {
+        // Only Lumber has a target and Lumber production is 0 → covered=0/total=1 → score 0.
+        var settings = new SimulationSettings { LumberTarget = 100, StoneTarget = 0, MetalTarget = 0, PetriciteTarget = 0 };
         var output = new ResourceOutput(0, 100, 50, 3);
-        Assert.Equal(0, Simulator.Score(output));
+        Assert.Equal(0, Simulator.Score(output, settings));
     }
 
     [Fact]
-    public void Score_PerfectRatios_IsHigherThanImbalanced()
+    public void Score_PartialProduction_IsBetweenZeroAndOne()
     {
-        double lumberUnits = 10;
-        var balanced = new ResourceOutput(
-            Lumber:    (int)(lumberUnits * GameConstants.LumberTileValue),
-            Stone:     (int)(lumberUnits * GameConstants.StoneRatio     * GameConstants.StoneTileValue),
-            Metal:     (int)(lumberUnits * GameConstants.MetalRatio     * GameConstants.MetalTileValue),
-            Petricite: (int)(lumberUnits * GameConstants.PetriciteRatio * GameConstants.PetriciteTileValue));
+        // 2 of 4 targeted resources have production → coverage score = 0.5.
+        var settings = new SimulationSettings
+        {
+            LumberTarget    = 1000,
+            StoneTarget     = 1000,
+            MetalTarget     = 1000,
+            PetriciteTarget = 1000,
+        };
+        var output = new ResourceOutput(Lumber: 10, Stone: 10, Metal: 0, Petricite: 0);
+        double score = Simulator.Score(output, settings);
+        Assert.True(score > 0 && score < 1, $"Expected partial score in (0,1), got {score}");
+        Assert.Equal(0.5, score, precision: 10);
+    }
 
-        var allLumber = new ResourceOutput(
-            Lumber:    (int)(lumberUnits * 4 * GameConstants.LumberTileValue),
-            Stone: 0, Metal: 0, Petricite: 0);
+    [Fact]
+    public void Score_PartialProduction_IsLowerThanFullProduction()
+    {
+        // Partial coverage (some resources at 0) must score below a fully-producing board.
+        var settings = new SimulationSettings
+        {
+            LumberTarget    = 1000,
+            StoneTarget     = 1000,
+            MetalTarget     = 1000,
+            PetriciteTarget = 1000,
+        };
+        var partial = new ResourceOutput(Lumber: 10, Stone: 0, Metal: 0, Petricite: 0);
+        var full    = new ResourceOutput(Lumber:  1, Stone: 1, Metal: 1, Petricite: 1);
+        Assert.True(Simulator.Score(full, settings) > Simulator.Score(partial, settings));
+    }
 
-        Assert.True(Simulator.Score(balanced) > Simulator.Score(allLumber));
+    [Fact]
+    public void Score_FewerMaxTurns_IsHigher()
+    {
+        // A board that hits all targets in fewer turns should score higher.
+        var settings = new SimulationSettings
+        {
+            LumberTarget    = 1000,
+            StoneTarget     = 1000,
+            MetalTarget     = 1000,
+            PetriciteTarget = 1000,
+        };
+        // 10 of each per turn → 100 max turns
+        var faster = new ResourceOutput(10, 10, 10, 10);
+        // 5 of each per turn → 200 max turns
+        var slower = new ResourceOutput(5,  5,  5,  5);
+
+        Assert.True(Simulator.Score(faster, settings) > Simulator.Score(slower, settings));
+    }
+
+    [Fact]
+    public void Score_BottleneckReduction_IsPreferredOverSumReduction()
+    {
+        // Reducing the bottleneck (max turns) must always score higher than an equal-sized
+        // reduction in a non-bottleneck resource, even if the non-bottleneck change
+        // produces a larger total-turns improvement.
+        //
+        // Scenario: stone is the bottleneck (88 turns), others are faster.
+        //   Board A: reduces stone 88→80 but increases lumber 67→75 (sum goes 294→287, max goes 88→80)
+        //   Board B: reduces lumber 67→50 and petricite 56→45 (sum goes 294→280, max stays 88)
+        // Board A must score higher because it reduces the max even though Board B reduces the sum more.
+        var settings = new SimulationSettings
+        {
+            LumberTarget    = 296_300,
+            StoneTarget     = 343_400,
+            MetalTarget     = 143_650,
+            PetriciteTarget =   1_450,
+        };
+        // Board A: max=80 (stone), lower than Board B.
+        // stone   80 turns: ceil(343400/4293) = 80  ✓
+        // lumber  75 turns: ceil(296300/3951) = 75  ✓
+        // metal   83 turns: ceil(143650/1731) = 83  ✓
+        // petricite 56 turns: ceil(1450/26)   = 56  ✓
+        var boardA = new ResourceOutput(Lumber: 3951, Stone: 4293, Metal: 1731, Petricite: 26);
+
+        // Board B: max=88 (stone), higher than Board A, but lower total turns.
+        // stone  88 turns: ceil(343400/3903) = 88  ✓
+        // lumber 50 turns: ceil(296300/5927) = 50  ✓
+        // metal  83 turns: ceil(143650/1731) = 83  ✓
+        // petricite 44 turns: ceil(1450/33)  = 44  ✓
+        var boardB = new ResourceOutput(Lumber: 5927, Stone: 3903, Metal: 1731, Petricite: 33);
+
+        var turnsA = Simulator.TurnsToComplete(boardA, settings);
+        var turnsB = Simulator.TurnsToComplete(boardB, settings);
+
+        // Confirm Board A has a lower max
+        Assert.True(turnsA.Max < turnsB.Max,
+            $"Expected Board A max {turnsA.Max} < Board B max {turnsB.Max}");
+        // Confirm Board B has a lower sum (it's the foil: better sum but worse max)
+        long sumA = (long)turnsA.Lumber + turnsA.Stone + turnsA.Metal + turnsA.Petricite;
+        long sumB = (long)turnsB.Lumber + turnsB.Stone + turnsB.Metal + turnsB.Petricite;
+        Assert.True(sumB < sumA,
+            $"Expected Board B sum {sumB} < Board A sum {sumA} (foil condition)");
+
+        // Board A must score higher despite worse sum, because its max is lower.
+        Assert.True(Simulator.Score(boardA, settings) > Simulator.Score(boardB, settings),
+            $"Board A (max={turnsA.Max}, sum={sumA}) should outscore Board B (max={turnsB.Max}, sum={sumB})");
     }
 
     [Fact]
@@ -521,13 +621,14 @@ public class SimulatorTests
     }
 
     [Fact]
-    public void FullReport_ContainsScoreAndProductionLines()
+    public void FullReport_ContainsTurnsAndProductionLines()
     {
         var board = BoardData.CreateDefaultBoard();
         string report = Simulator.FullReport(board);
-        Assert.Contains("Score:", report);
-        Assert.Contains("Total Production:", report);
+        Assert.Contains("Max Turns:", report);
+        Assert.Contains("Total Production (per turn):", report);
         Assert.Contains("Food:", report);
+        Assert.Contains("Turns to hit targets:", report);
     }
 
     // --- Influence-count tests ---
@@ -662,13 +763,15 @@ public class SimulatorTests
         };
         var allocated = Simulator.SmartAllocateBoard(board, settings);
 
-        // After smart allocation each non-locked settlement should meet the food target.
-        foreach (var settlement in allocated.Values)
-        {
-            int food = Simulator.SettlementOutput(settlement).Food;
-            Assert.True(food >= 2,
-                $"{settlement.Name} has only {food} food (target: 2)");
-        }
+        // The total food across all eligible (non-capital) settlements should meet the global
+        // food goal (FoodTargetPerSettlement × eligible count).  Individual settlements may
+        // have 0 food — farms are placed in the cheapest global slots first so that fewer
+        // farm slots are consumed overall.
+        var eligible = allocated.Values.Where(s => !s.AllowsPetriciteMill).ToList();
+        int totalFood   = eligible.Sum(s => Simulator.SettlementOutput(s).Food);
+        int totalTarget = settings.FoodTargetPerSettlement * eligible.Count;
+        Assert.True(totalFood >= totalTarget,
+            $"Total food {totalFood} is below global target {totalTarget}");
     }
 
     [Fact]
@@ -734,5 +837,315 @@ public class SimulatorTests
     {
         var settings = new SimulationSettings();
         Assert.Equal(2, settings.FoodTargetPerSettlement);
+    }
+
+    [Fact]
+    public void SmartAllocateBoard_FoodTarget_PerSettlementFoodMatchesTarget()
+    {
+        // The global food total should be at least FoodTargetPerSettlement × eligible count.
+        // With Farm L4 (5 food/slot, 6 in Heartland), far fewer than one farm per settlement
+        // is needed.  The capital is exempt from the food target.
+        var board = BoardData.CreateDefaultBoard();
+        var settings = new SimulationSettings
+        {
+            RequireDurandsWorkshop    = false,
+            RequireShrineOfVeiledLady = false,
+            RequireQuartermaster      = false,
+            FoodTargetPerSettlement   = 2,
+            MaxBuildingLevel          = 4,
+        };
+        var allocated = Simulator.SmartAllocateBoard(board, settings);
+
+        // Capital should have 0 food (its slots are reserved for PetriciteMills).
+        foreach (var settlement in allocated.Values.Where(s => s.AllowsPetriciteMill))
+            Assert.Equal(0, Simulator.SettlementOutput(settlement).Food);
+
+        // Total food across eligible settlements must reach the global target.
+        var eligible    = allocated.Values.Where(s => !s.AllowsPetriciteMill).ToList();
+        int totalFood   = eligible.Sum(s => Simulator.SettlementOutput(s).Food);
+        int totalTarget = settings.FoodTargetPerSettlement * eligible.Count;
+        Assert.True(totalFood >= totalTarget,
+            $"Total food {totalFood} is below global target {totalTarget}");
+    }
+
+    [Fact]
+    public void SmartAllocateBoard_FarmPlacement_UsesMaxLevelFarms()
+    {
+        // Farm slots should always use the maximum building level so each slot provides the
+        // most food possible.  The global-total approach also means fewer farms than
+        // settlements are needed for FoodTarget=2: the board has 15 eligible (non-capital)
+        // settlements, giving a total food target of 30.  Farm L4 gives 5 food per slot
+        // (6 in Heartland on the first two farms), so the target can be reached in far
+        // fewer than 15 farm slots, leaving the remaining slots for production structures.
+        var board = BoardData.CreateDefaultBoard();
+        var settings = new SimulationSettings
+        {
+            RequireDurandsWorkshop    = false,
+            RequireShrineOfVeiledLady = false,
+            RequireQuartermaster      = false,
+            FoodTargetPerSettlement   = 2,
+            MaxBuildingLevel          = 4,
+        };
+        var allocated = Simulator.SmartAllocateBoard(board, settings);
+
+        var eligibleSettlements = allocated.Values.Where(s => !s.AllowsPetriciteMill).ToList();
+        var allFarms = eligibleSettlements
+            .SelectMany(s => s.Structures.Where(st => st.Type == StructureType.Farm))
+            .ToList();
+
+        // Every placed farm must be at the maximum building level.
+        foreach (var farm in allFarms)
+            Assert.Equal(settings.MaxBuildingLevel, farm.Level);
+
+        // The total number of farms should be less than the number of eligible settlements,
+        // confirming that not every settlement has a farm (global target was hit early).
+        Assert.True(allFarms.Count < eligibleSettlements.Count,
+            $"Expected fewer farms ({allFarms.Count}) than eligible settlements ({eligibleSettlements.Count})");
+    }
+
+    [Fact]
+    public void OptimizeBoard_UniqueStructures_AppearAtMostOnce()
+    {
+        // DurandsWorkshop, ShrineOfVeiledLady, and Quartermaster must each appear
+        // at most once on the optimized board.
+        var board = BoardData.CreateDefaultBoard();
+        var settings = new SimulationSettings
+        {
+            RequireDurandsWorkshop    = true,
+            RequireShrineOfVeiledLady = true,
+            RequireQuartermaster      = true,
+            FoodTargetPerSettlement   = 0,
+        };
+        var optimized = Simulator.OptimizeBoard(board, settings);
+
+        var allStructures = optimized.Values.SelectMany(s => s.Structures).ToList();
+
+        Assert.Equal(1, allStructures.Count(s => s.Type == StructureType.DurandsWorkshop));
+        Assert.Equal(1, allStructures.Count(s => s.Type == StructureType.ShrineOfVeiledLady));
+        Assert.Equal(1, allStructures.Count(s => s.Type == StructureType.Quartermaster));
+    }
+
+    [Fact]
+    public void Permutate_UniqueStructures_AppearAtMostOnce()
+    {
+        // Even when Permutate runs without SmartAllocate fixed slots, unique structures
+        // must not be duplicated (DurandsWorkshop produces Petricite so the optimizer
+        // would otherwise keep adding copies to improve the score).
+        var board = BoardData.CreateDefaultBoard();
+        var result = Simulator.Permutate(board);
+
+        var allStructures = result.Values.SelectMany(s => s.Structures).ToList();
+
+        Assert.True(allStructures.Count(s => s.Type == StructureType.DurandsWorkshop)    <= 1,
+            "DurandsWorkshop appears more than once");
+        Assert.True(allStructures.Count(s => s.Type == StructureType.ShrineOfVeiledLady) <= 1,
+            "ShrineOfVeiledLady appears more than once");
+        Assert.True(allStructures.Count(s => s.Type == StructureType.Quartermaster)      <= 1,
+            "Quartermaster appears more than once");
+    }
+
+    // --- TurnsToComplete and SimulationSettings target tests ---
+
+    [Fact]
+    public void SimulationSettings_ResourceTargets_HaveCorrectDefaults()
+    {
+        var settings = new SimulationSettings();
+        Assert.Equal(296_300, settings.LumberTarget);
+        Assert.Equal(343_400, settings.StoneTarget);
+        Assert.Equal(143_650, settings.MetalTarget);
+        Assert.Equal(1_450,   settings.PetriciteTarget);
+    }
+
+    [Fact]
+    public void TurnsToComplete_ExactProduction_ReturnsOneForEachResource()
+    {
+        var settings = new SimulationSettings
+        {
+            LumberTarget    = 100,
+            StoneTarget     = 200,
+            MetalTarget     = 50,
+            PetriciteTarget = 10,
+        };
+        // Production exactly equals each target → 1 turn each
+        var output = new ResourceOutput(Lumber: 100, Stone: 200, Metal: 50, Petricite: 10);
+        var turns = Simulator.TurnsToComplete(output, settings);
+
+        Assert.Equal(1, turns.Lumber);
+        Assert.Equal(1, turns.Stone);
+        Assert.Equal(1, turns.Metal);
+        Assert.Equal(1, turns.Petricite);
+        Assert.Equal(1, turns.Max);
+    }
+
+    [Fact]
+    public void TurnsToComplete_CeilingDivision_RoundsUp()
+    {
+        var settings = new SimulationSettings
+        {
+            LumberTarget    = 10,
+            StoneTarget     = 0,
+            MetalTarget     = 0,
+            PetriciteTarget = 0,
+        };
+        // 10 / 3 = 3.33… → 4 turns needed
+        var output = new ResourceOutput(Lumber: 3, Stone: 1, Metal: 1, Petricite: 1);
+        var turns = Simulator.TurnsToComplete(output, settings);
+
+        Assert.Equal(4, turns.Lumber);
+        Assert.Equal(0, turns.Stone);
+        Assert.Equal(0, turns.Metal);
+        Assert.Equal(0, turns.Petricite);
+        Assert.Equal(4, turns.Max);
+    }
+
+    [Fact]
+    public void TurnsToComplete_ZeroProduction_ReturnsIntMaxForThatResource()
+    {
+        var settings = new SimulationSettings
+        {
+            LumberTarget    = 100,
+            StoneTarget     = 0,
+            MetalTarget     = 0,
+            PetriciteTarget = 0,
+        };
+        var output = new ResourceOutput(Lumber: 0, Stone: 0, Metal: 0, Petricite: 0);
+        var turns = Simulator.TurnsToComplete(output, settings);
+
+        Assert.Equal(int.MaxValue, turns.Lumber);
+        Assert.Equal(int.MaxValue, turns.Max);
+    }
+
+    [Fact]
+    public void TurnsToComplete_ZeroTarget_ReturnsZeroTurns()
+    {
+        var settings = new SimulationSettings
+        {
+            LumberTarget    = 0,
+            StoneTarget     = 0,
+            MetalTarget     = 0,
+            PetriciteTarget = 0,
+        };
+        var output = new ResourceOutput(Lumber: 10, Stone: 10, Metal: 10, Petricite: 10);
+        var turns = Simulator.TurnsToComplete(output, settings);
+
+        Assert.Equal(0, turns.Lumber);
+        Assert.Equal(0, turns.Stone);
+        Assert.Equal(0, turns.Metal);
+        Assert.Equal(0, turns.Petricite);
+        Assert.Equal(0, turns.Max);
+    }
+
+    [Fact]
+    public void TurnsToComplete_MixedTargets_MaxIdentifiesBottleneck()
+    {
+        // Lumber needs 50 turns, all other targets are 0 (already met) → Max is 50.
+        var settings = new SimulationSettings
+        {
+            LumberTarget    = 500,
+            StoneTarget     = 0,
+            MetalTarget     = 0,
+            PetriciteTarget = 0,
+        };
+        var output = new ResourceOutput(Lumber: 10, Stone: 9999, Metal: 9999, Petricite: 9999);
+        var turns = Simulator.TurnsToComplete(output, settings);
+
+        Assert.Equal(50, turns.Lumber);
+        Assert.Equal(0,  turns.Stone);
+        Assert.Equal(0,  turns.Metal);
+        Assert.Equal(0,  turns.Petricite);
+        Assert.Equal(50, turns.Max);
+    }
+
+    [Fact]
+    public void OptimizeBoard_NoEmptyProductionSlots()
+    {
+        // After a full optimization run, no unlocked settlement should have an Empty slot
+        // that is not accounted for — the new Score gradient must drive Permutate to fill
+        // every slot with a production structure.
+        var board = BoardData.CreateDefaultBoard();
+        var settings = new SimulationSettings
+        {
+            RequireDurandsWorkshop    = true,
+            RequireShrineOfVeiledLady = true,
+            RequireQuartermaster      = true,
+            FoodTargetPerSettlement   = 2,
+            MaxBuildingLevel          = 4,
+        };
+        var optimized = Simulator.OptimizeBoard(board, settings);
+
+        foreach (var settlement in optimized.Values)
+        {
+            int emptyCount = settlement.Structures.Count(s => s.Type == StructureType.Empty);
+            Assert.True(emptyCount == 0,
+                $"{settlement.Name} still has {emptyCount} empty slot(s) after optimization.");
+        }
+    }
+
+    [Fact]
+    public void OptimizeBoard_Capital_GetsMultiplePetriciteMills()
+    {
+        // The Great City is the only settlement that can build PetriciteMills, and multiple
+        // are allowed. When petricite is the binding bottleneck, the optimizer should fill
+        // the capital's available slots with more than one PetriciteMill.
+        var board = BoardData.CreateDefaultBoard();
+        var settings = new SimulationSettings
+        {
+            RequireDurandsWorkshop    = false,
+            RequireShrineOfVeiledLady = false,
+            RequireQuartermaster      = false,
+            FoodTargetPerSettlement   = 0,
+            MaxBuildingLevel          = 4,
+        };
+        var optimized = Simulator.OptimizeBoard(board, settings);
+
+        var capital = optimized["The Great City"];
+        int millCount = capital.Structures.Count(s => s.Type == StructureType.PetriciteMill);
+        Assert.True(millCount > 1,
+            $"The Great City should have more than one PetriciteMill after optimization (got {millCount}).");
+    }
+
+    [Fact]
+    public void SmartAllocateBoard_Capital_NoRequiredStructuresOrFarms()
+    {
+        // The capital's slots should never receive required structures or food farms from
+        // SmartAllocate — they are too valuable as PetriciteMills and must remain free for
+        // Permutate to fill with PetriciteMills.
+        var board = BoardData.CreateDefaultBoard();
+        var settings = new SimulationSettings
+        {
+            RequireDurandsWorkshop    = true,
+            RequireShrineOfVeiledLady = true,
+            RequireQuartermaster      = true,
+            FoodTargetPerSettlement   = 2,
+            MaxBuildingLevel          = 4,
+        };
+        var allocated = Simulator.SmartAllocateBoard(board, settings);
+        var capital   = allocated["The Great City"];
+
+        foreach (var structure in capital.Structures)
+        {
+            Assert.True(
+                structure.Type is StructureType.Empty
+                                or StructureType.Marketplace
+                                or StructureType.Academy
+                                or StructureType.PetriciteMill,
+                $"The Great City should not contain {structure.Type} — that slot is wasted on a non-PetriciteMill structure.");
+        }
+    }
+
+    [Fact]
+    public void OptimizeBoard_Capital_GetsMultiplePetriciteMills_WithDefaultSettings()
+    {
+        // With required structures and food targets enabled (the default), the capital
+        // should still receive multiple PetriciteMills because required structures and farms
+        // are placed in other settlements.
+        var board     = BoardData.CreateDefaultBoard();
+        var settings  = new SimulationSettings(); // all defaults
+        var optimized = Simulator.OptimizeBoard(board, settings);
+
+        var capital   = optimized["The Great City"];
+        int millCount = capital.Structures.Count(s => s.Type == StructureType.PetriciteMill);
+        Assert.True(millCount > 1,
+            $"The Great City should have more than one PetriciteMill with default settings (got {millCount}).");
     }
 }

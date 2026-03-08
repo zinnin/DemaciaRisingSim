@@ -52,11 +52,17 @@ public class BoardDataTests
     }
 
     [Fact]
-    public void CreateDefaultBoard_NonCapitalSettlements_DoNotAllowPetriciteMill()
+    public void CreateDefaultBoard_OnlyCapital_AllowsPetriciteMill()
     {
+        // PetriciteMill is capital-only; no other settlement may build one.
         var board = BoardData.CreateDefaultBoard();
-        foreach (var kv in board.Where(kv => kv.Key != "The Great City"))
-            Assert.False(kv.Value.AllowsPetriciteMill, $"Settlement {kv.Key} should not allow PetriciteMill");
+        foreach (var kv in board)
+        {
+            if (kv.Key == "The Great City")
+                Assert.True(kv.Value.AllowsPetriciteMill, "The Great City (capital) should allow PetriciteMill");
+            else
+                Assert.False(kv.Value.AllowsPetriciteMill, $"Settlement {kv.Key} should not allow PetriciteMill");
+        }
     }
 
     [Fact]

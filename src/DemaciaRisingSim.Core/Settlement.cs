@@ -43,7 +43,8 @@ public class Settlement
     public void AddLink(Settlement other) => _neighbors.Add(other.Name);
 
     /// <summary>
-    /// Returns true if a Petricite Mill may be placed in this settlement (capital only).
+    /// Returns true if a Petricite Mill may be placed in this settlement.
+    /// Petricite Mills can only be constructed in the capital, but multiple may be built.
     /// </summary>
     public bool AllowsPetriciteMill => IsCapital;
 

@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:DemaciaRisingSim.UI"
         mc:Ignorable="d"
-        Title="Demacia Rising Simulator" Height="720" Width="1100"
+        Title="Demacia Rising Simulator" Height="780" Width="1100"
         Background="#1a1a2e">
 
     <Window.Resources>
@@ -28,6 +28,13 @@
             <Setter Property="Background" Value="#16213e"/>
             <Setter Property="Foreground" Value="#e2e2e2"/>
             <Setter Property="BorderBrush" Value="#0f3460"/>
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="#16213e"/>
+            <Setter Property="Foreground" Value="#e2e2e2"/>
+            <Setter Property="BorderBrush" Value="#0f3460"/>
+            <Setter Property="Padding" Value="4,2"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
         <Style TargetType="DataGrid">
             <Setter Property="Background" Value="#16213e"/>
@@ -55,7 +62,7 @@
         <StackPanel DockPanel.Dock="Top" Margin="0,0,0,10">
             <TextBlock Text="Demacia Rising — Board Simulator" FontSize="22" FontWeight="Bold"
                        Foreground="#e2d6a0"/>
-            <TextBlock Text="Visualize settlement layouts and optimize structure assignments for maximum production score"
+            <TextBlock Text="Visualize settlement layouts and optimize structure assignments to hit resource targets in the fewest turns"
                        Foreground="#aaaacc" FontSize="12" Margin="0,2,0,0"/>
         </StackPanel>
 
@@ -73,8 +80,8 @@
             <StackPanel>
                 <TextBlock Text="Optimization Settings" FontWeight="SemiBold" Foreground="#e2d6a0"
                            Margin="0,0,0,6"/>
-                <StackPanel Orientation="Horizontal">
-                    <!-- Required structures -->
+                <!-- Row 1: required structures / max level / food -->
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                     <TextBlock Text="Required structures:" VerticalAlignment="Center" Margin="0,0,10,0"/>
                     <CheckBox Content="Durand's Workshop" IsChecked="{Binding RequireDurandsWorkshop}"
                               Margin="0,0,14,0"/>
@@ -103,26 +110,57 @@
                         <ComboBoxItem Content="5" Tag="5"/>
                     </ComboBox>
                 </StackPanel>
+                <!-- Row 2: resource targets -->
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Resource targets:" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBlock Text="Lumber:" Foreground="#88cc88" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                    <TextBox Text="{Binding LumberTarget, UpdateSourceTrigger=PropertyChanged}"
+                             Width="75" Margin="0,0,12,0"/>
+                    <TextBlock Text="Stone:" Foreground="#aaaaee" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                    <TextBox Text="{Binding StoneTarget, UpdateSourceTrigger=PropertyChanged}"
+                             Width="75" Margin="0,0,12,0"/>
+                    <TextBlock Text="Metal:" Foreground="#ccaa66" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                    <TextBox Text="{Binding MetalTarget, UpdateSourceTrigger=PropertyChanged}"
+                             Width="75" Margin="0,0,12,0"/>
+                    <TextBlock Text="Petricite:" Foreground="#cc88cc" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                    <TextBox Text="{Binding PetriciteTarget, UpdateSourceTrigger=PropertyChanged}"
+                             Width="70"/>
+                </StackPanel>
             </StackPanel>
         </Border>
 
-        <!-- Summary totals -->
+        <!-- Summary panel -->
         <Border DockPanel.Dock="Top" Background="#16213e" BorderBrush="#0f3460"
                 BorderThickness="1" CornerRadius="4" Padding="10,8" Margin="0,0,0,10">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="Total Production — " FontWeight="SemiBold" Foreground="#e2d6a0"/>
-                <TextBlock Text="Lumber: " Foreground="#88cc88"/>
-                <TextBlock Text="{Binding TotalLumber}" Foreground="#88cc88" FontWeight="Bold" Margin="0,0,14,0"/>
-                <TextBlock Text="Stone: " Foreground="#aaaaee"/>
-                <TextBlock Text="{Binding TotalStone}" Foreground="#aaaaee" FontWeight="Bold" Margin="0,0,14,0"/>
-                <TextBlock Text="Metal: " Foreground="#ccaa66"/>
-                <TextBlock Text="{Binding TotalMetal}" Foreground="#ccaa66" FontWeight="Bold" Margin="0,0,14,0"/>
-                <TextBlock Text="Petricite: " Foreground="#cc88cc"/>
-                <TextBlock Text="{Binding TotalPetricite}" Foreground="#cc88cc" FontWeight="Bold" Margin="0,0,14,0"/>
-                <TextBlock Text="Food: " Foreground="#88ddaa"/>
-                <TextBlock Text="{Binding TotalFood}" Foreground="#88ddaa" FontWeight="Bold" Margin="0,0,20,0"/>
-                <TextBlock Text="Score: " Foreground="#e2d6a0" FontWeight="SemiBold"/>
-                <TextBlock Text="{Binding Score}" Foreground="#e2d6a0" FontWeight="Bold" FontSize="15"/>
+            <StackPanel>
+                <!-- Production per turn -->
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                    <TextBlock Text="Per Turn — " FontWeight="SemiBold" Foreground="#e2d6a0"/>
+                    <TextBlock Text="Lumber: " Foreground="#88cc88"/>
+                    <TextBlock Text="{Binding TotalLumber}" Foreground="#88cc88" FontWeight="Bold" Margin="0,0,14,0"/>
+                    <TextBlock Text="Stone: " Foreground="#aaaaee"/>
+                    <TextBlock Text="{Binding TotalStone}" Foreground="#aaaaee" FontWeight="Bold" Margin="0,0,14,0"/>
+                    <TextBlock Text="Metal: " Foreground="#ccaa66"/>
+                    <TextBlock Text="{Binding TotalMetal}" Foreground="#ccaa66" FontWeight="Bold" Margin="0,0,14,0"/>
+                    <TextBlock Text="Petricite: " Foreground="#cc88cc"/>
+                    <TextBlock Text="{Binding TotalPetricite}" Foreground="#cc88cc" FontWeight="Bold" Margin="0,0,14,0"/>
+                    <TextBlock Text="Food: " Foreground="#88ddaa"/>
+                    <TextBlock Text="{Binding TotalFood}" Foreground="#88ddaa" FontWeight="Bold"/>
+                </StackPanel>
+                <!-- Turns to target -->
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Turns — " FontWeight="SemiBold" Foreground="#e2d6a0"/>
+                    <TextBlock Text="Lumber: " Foreground="#88cc88"/>
+                    <TextBlock Text="{Binding TurnsLumber}" Foreground="#88cc88" FontWeight="Bold" Margin="0,0,14,0"/>
+                    <TextBlock Text="Stone: " Foreground="#aaaaee"/>
+                    <TextBlock Text="{Binding TurnsStone}" Foreground="#aaaaee" FontWeight="Bold" Margin="0,0,14,0"/>
+                    <TextBlock Text="Metal: " Foreground="#ccaa66"/>
+                    <TextBlock Text="{Binding TurnsMetal}" Foreground="#ccaa66" FontWeight="Bold" Margin="0,0,14,0"/>
+                    <TextBlock Text="Petricite: " Foreground="#cc88cc"/>
+                    <TextBlock Text="{Binding TurnsPetricite}" Foreground="#cc88cc" FontWeight="Bold" Margin="0,0,20,0"/>
+                    <TextBlock Text="Max: " Foreground="#e2d6a0" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding MaxTurns}" Foreground="#e2d6a0" FontWeight="Bold" FontSize="15"/>
+                </StackPanel>
             </StackPanel>
         </Border>
 
