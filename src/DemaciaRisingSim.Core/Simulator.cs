@@ -275,9 +275,11 @@ public static class Simulator
     ///         and only placing a buff structure where the influenced-slot count exceeds the
     ///         break-even threshold (1 / multiplier_at_max_level).</item>
     ///   <item>Places required structures (Durand's Workshop, Shrine, Quartermaster) in the
-    ///         globally lowest-value remaining slots.</item>
-    ///   <item>Meets the per-settlement food target by placing Farms in each settlement's
-    ///         lowest-value remaining slots.</item>
+    ///         globally lowest-value remaining slots, preferring settlements with few connections
+    ///         and low Academy coverage over high-value terrain or capital slots.</item>
+    ///   <item>Meets the per-settlement food target by placing Farms in each non-capital
+    ///         settlement's lowest-value remaining slots. The capital is exempt because its
+    ///         slots are more valuable as PetriciteMills than as farms.</item>
     ///   <item>Leaves all other slots empty for further optimization via <see cref="Permutate"/>.</item>
     /// </list>
     /// </summary>
@@ -355,7 +357,7 @@ public static class Simulator
             for (int i = 0; i < s.Structures.Length; i++)
             {
                 if (s.Structures[i].Type == StructureType.Empty)
-                    allSlots.Add((s.Name, i, ComputeSlotValue(s, i, maxLevel)));
+                    allSlots.Add((s.Name, i, ComputeSlotValue(s, i, maxLevel, settings)));
             }
         }
         var sortedByValue = allSlots.OrderBy(x => x.Value).ToList();
@@ -381,6 +383,7 @@ public static class Simulator
         }
 
         // --- Step 7: Meet the per-settlement food target using lowest-value remaining slots ---
+        // The capital is exempt: its slots are more valuable as PetriciteMills than as farms.
         if (settings.FoodTargetPerSettlement > 0)
         {
             // Farm structures go up to level 4 (unlike buff structures which cap at 3).
@@ -388,6 +391,9 @@ public static class Simulator
             foreach (var s in work.Values)
             {
                 if (settings.LockedSettlements.Contains(s.Name)) continue;
+
+                // Skip the capital — its slots are reserved for PetriciteMills.
+                if (s.AllowsPetriciteMill) continue;
 
                 int foodNeeded = settings.FoodTargetPerSettlement - SettlementOutput(s).Food;
                 if (foodNeeded <= 0) continue;
@@ -553,40 +559,47 @@ public static class Simulator
     }
 
     /// <summary>
-    /// Estimates the production opportunity cost for a slot: the normalized output value
+    /// Estimates the production opportunity cost for a slot: the normalised output value
     /// of the best production structure that could be placed in this slot, accounting for
     /// terrain bonuses already claimed by earlier slots and the settlement's multiplier.
-    /// Normalization uses the maximum level-4 output for each resource type, derived from
-    /// <see cref="StructureData"/>.
+    /// <para>
+    /// When <paramref name="settings"/> are supplied, each resource is normalised by its
+    /// accumulation <em>target</em> (progress per turn per slot) so that scarce / bottleneck
+    /// resources — such as Petricite, whose target is much smaller than Lumber — are correctly
+    /// ranked as more expensive to give up.  This ensures that required structures and food
+    /// farms are placed in the slots of settlements that have the fewest connections and the
+    /// least Academy coverage (i.e., where a production structure would contribute least).
+    /// Without settings the method falls back to max-production normalisation.
+    /// </para>
     /// </summary>
-    private static double ComputeSlotValue(Settlement settlement, int slotIndex, int maxLevel)
+    private static double ComputeSlotValue(Settlement settlement, int slotIndex, int maxLevel,
+        SimulationSettings? settings = null)
     {
         int effectiveLevel = Math.Max(1, Math.Min(4, maxLevel));
 
-        // Normalize by max level-4 output so all resources are on the same 0–1 scale.
-        int maxLumberOutput    = StructureData.Get(StructureType.Lumberyard,    4).LumberOutput;
-        int maxStoneOutput     = StructureData.Get(StructureType.Quarry,        4).StoneOutput;
-        int maxMetalOutput     = StructureData.Get(StructureType.Forge,         4).MetalOutput;
+        // Normalise by resource target (units of "progress per slot per turn") when targets
+        // are provided, so bottleneck resources weigh proportionally more than plentiful ones.
+        // Fall back to max level-4 production when no targets are set.
+        double lumberDenom = settings?.LumberTarget    > 0 ? settings.LumberTarget    : (double)StructureData.Get(StructureType.Lumberyard, 4).LumberOutput;
+        double stoneDenom  = settings?.StoneTarget     > 0 ? settings.StoneTarget     : (double)StructureData.Get(StructureType.Quarry,     4).StoneOutput;
+        double metalDenom  = settings?.MetalTarget     > 0 ? settings.MetalTarget     : (double)StructureData.Get(StructureType.Forge,      4).MetalOutput;
 
         // Lumberyard value (always available everywhere)
-        double lumberVal = (double)StructureData.Get(StructureType.Lumberyard, effectiveLevel).LumberOutput
-                           / maxLumberOutput;
+        double lumberVal = StructureData.Get(StructureType.Lumberyard, effectiveLevel).LumberOutput / lumberDenom;
         if (settlement.Environment.HasFlag(EnvironmentType.Woodland))
             lumberVal *= 1.25;
 
         // Quarry value: first Quarry in a Mountain settlement earns the terrain double
         bool hasPriorQuarry = settlement.Environment.HasFlag(EnvironmentType.Mountain) &&
                               settlement.Structures.Take(slotIndex).Any(s => s.Type == StructureType.Quarry);
-        double stoneVal = (double)StructureData.Get(StructureType.Quarry, effectiveLevel).StoneOutput
-                          / maxStoneOutput;
+        double stoneVal = StructureData.Get(StructureType.Quarry, effectiveLevel).StoneOutput / stoneDenom;
         if (settlement.Environment.HasFlag(EnvironmentType.Mountain) && !hasPriorQuarry)
             stoneVal *= 2.0;
 
         // Forge value: first Forge in a Border settlement earns the terrain double
         bool hasPriorForge = settlement.Environment.HasFlag(EnvironmentType.Border) &&
                              settlement.Structures.Take(slotIndex).Any(s => s.Type == StructureType.Forge);
-        double metalVal = (double)StructureData.Get(StructureType.Forge, effectiveLevel).MetalOutput
-                          / maxMetalOutput;
+        double metalVal = StructureData.Get(StructureType.Forge, effectiveLevel).MetalOutput / metalDenom;
         if (settlement.Environment.HasFlag(EnvironmentType.Border) && !hasPriorForge)
             metalVal *= 2.0;
 
@@ -594,10 +607,9 @@ public static class Simulator
         double petriciteVal = 0;
         if (settlement.AllowsPetriciteMill)
         {
+            double petDenom = settings?.PetriciteTarget > 0 ? settings.PetriciteTarget : (double)StructureData.Get(StructureType.PetriciteMill, 3).PetriciteOutput;
             int millLevel = Math.Max(1, Math.Min(3, maxLevel));
-            int maxPetriciteOutput = StructureData.Get(StructureType.PetriciteMill, 3).PetriciteOutput;
-            petriciteVal = (double)StructureData.Get(StructureType.PetriciteMill, millLevel).PetriciteOutput
-                           / maxPetriciteOutput;
+            petriciteVal = StructureData.Get(StructureType.PetriciteMill, millLevel).PetriciteOutput / petDenom;
         }
 
         double best = Math.Max(lumberVal, Math.Max(stoneVal, Math.Max(metalVal, petriciteVal)));

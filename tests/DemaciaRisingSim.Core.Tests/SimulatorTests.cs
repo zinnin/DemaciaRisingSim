@@ -714,9 +714,11 @@ public class SimulatorTests
         };
         var allocated = Simulator.SmartAllocateBoard(board, settings);
 
-        // After smart allocation each non-locked settlement should meet the food target.
+        // After smart allocation each non-capital settlement should meet the food target.
+        // The capital is exempt: its slots are reserved for PetriciteMills.
         foreach (var settlement in allocated.Values)
         {
+            if (settlement.AllowsPetriciteMill) continue;
             int food = Simulator.SettlementOutput(settlement).Food;
             Assert.True(food >= 2,
                 $"{settlement.Name} has only {food} food (target: 2)");
@@ -791,10 +793,11 @@ public class SimulatorTests
     [Fact]
     public void SmartAllocateBoard_FoodTarget_PerSettlementFoodMatchesTarget()
     {
-        // Each settlement should receive no more than FoodTargetPerSettlement food
+        // Each non-capital settlement should receive no more than FoodTargetPerSettlement food
         // (plus at most 1 from an unavoidable Heartland terrain bonus rounding).
         // Previously, max-level (L4) farms were always placed even when L1/L2 sufficed,
         // causing 5+ food per settlement instead of the target 2.
+        // The capital is exempt from the food target and should have 0 food from SmartAllocate.
         var board = BoardData.CreateDefaultBoard();
         var settings = new SimulationSettings
         {
@@ -809,11 +812,19 @@ public class SimulatorTests
         foreach (var settlement in allocated.Values)
         {
             int food = Simulator.SettlementOutput(settlement).Food;
-            Assert.True(food >= 2,
-                $"{settlement.Name} has only {food} food (target: 2)");
-            // Food must not exceed the target by more than 1 (one unavoidable Heartland rounding unit).
-            Assert.True(food <= 3,
-                $"{settlement.Name} has {food} food, which overshoots the target of 2");
+            if (settlement.AllowsPetriciteMill)
+            {
+                // Capital is exempt from food target — its slots are reserved for PetriciteMills.
+                Assert.Equal(0, food);
+            }
+            else
+            {
+                Assert.True(food >= 2,
+                    $"{settlement.Name} has only {food} food (target: 2)");
+                // Food must not exceed the target by more than 1 (one unavoidable Heartland rounding unit).
+                Assert.True(food <= 3,
+                    $"{settlement.Name} has {food} food, which overshoots the target of 2");
+            }
         }
     }
 
@@ -1016,5 +1027,50 @@ public class SimulatorTests
         int millCount = capital.Structures.Count(s => s.Type == StructureType.PetriciteMill);
         Assert.True(millCount > 1,
             $"The Great City should have more than one PetriciteMill after optimization (got {millCount}).");
+    }
+
+    [Fact]
+    public void SmartAllocateBoard_Capital_NoRequiredStructuresOrFarms()
+    {
+        // The capital's slots should never receive required structures or food farms from
+        // SmartAllocate — they are too valuable as PetriciteMills and must remain free for
+        // Permutate to fill with PetriciteMills.
+        var board = BoardData.CreateDefaultBoard();
+        var settings = new SimulationSettings
+        {
+            RequireDurandsWorkshop    = true,
+            RequireShrineOfVeiledLady = true,
+            RequireQuartermaster      = true,
+            FoodTargetPerSettlement   = 2,
+            MaxBuildingLevel          = 4,
+        };
+        var allocated = Simulator.SmartAllocateBoard(board, settings);
+        var capital   = allocated["The Great City"];
+
+        foreach (var structure in capital.Structures)
+        {
+            Assert.True(
+                structure.Type is StructureType.Empty
+                                or StructureType.Marketplace
+                                or StructureType.Academy
+                                or StructureType.PetriciteMill,
+                $"The Great City should not contain {structure.Type} — that slot is wasted on a non-PetriciteMill structure.");
+        }
+    }
+
+    [Fact]
+    public void OptimizeBoard_Capital_GetsMultiplePetriciteMills_WithDefaultSettings()
+    {
+        // With required structures and food targets enabled (the default), the capital
+        // should still receive multiple PetriciteMills because required structures and farms
+        // are placed in other settlements.
+        var board     = BoardData.CreateDefaultBoard();
+        var settings  = new SimulationSettings(); // all defaults
+        var optimized = Simulator.OptimizeBoard(board, settings);
+
+        var capital   = optimized["The Great City"];
+        int millCount = capital.Structures.Count(s => s.Type == StructureType.PetriciteMill);
+        Assert.True(millCount > 1,
+            $"The Great City should have more than one PetriciteMill with default settings (got {millCount}).");
     }
 }
