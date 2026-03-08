@@ -19,25 +19,18 @@ public class Settlement
     /// <summary>The names of neighboring settlements that receive marketplace bonuses from this settlement.</summary>
     public IReadOnlyList<string> Neighbors => _neighbors;
 
-    /// <summary>
-    /// The names of settlements that receive academy bonuses from an academy placed in this settlement.
-    /// Includes this settlement and all others sharing the same environment (Heartland, Mountain, or Border).
-    /// </summary>
-    public IReadOnlyList<string> AcademyBuff { get; }
-
     /// <summary>The structures currently placed in this settlement's slots.</summary>
     public Structure[] Structures { get; set; }
 
     /// <summary>The current production multiplier (affected by Marketplace and Academy structures).</summary>
     public double Multiplier { get; set; } = 1.0;
 
-    public Settlement(string name, EnvironmentType environment, IReadOnlyList<string> academyBuff,
+    public Settlement(string name, EnvironmentType environment,
         bool isCapital = false, int slotCount = GameConstants.SettlementSlotCount)
     {
         Name = name;
         Environment = environment;
         IsCapital = isCapital;
-        AcademyBuff = academyBuff;
         Structures = new Structure[slotCount];
         Array.Fill(Structures, Structure.Empty);
         Multiplier = 1.0;
@@ -57,7 +50,7 @@ public class Settlement
     /// <summary>Creates a deep copy of this settlement.</summary>
     public Settlement Clone()
     {
-        var clone = new Settlement(Name, Environment, AcademyBuff, IsCapital, Structures.Length)
+        var clone = new Settlement(Name, Environment, IsCapital, Structures.Length)
         {
             Structures = (Structure[])Structures.Clone(),
             Multiplier = Multiplier,

@@ -80,6 +80,10 @@ public static class Simulator
             settlement.Multiplier = 1.0;
 
         // Apply Marketplace and Academy multipliers (level-aware).
+        // Academy buff targets are derived from shared primary environment (Heartland / Mountain / Border).
+        // Petricite is not a primary environment for academy grouping; Petricite-only settlements
+        // (e.g. The Great City) only buff themselves.
+        const EnvironmentType PrimaryMask = EnvironmentType.Heartland | EnvironmentType.Mountain | EnvironmentType.Border;
         foreach (var settlement in workingBoard.Values)
         {
             foreach (var structure in settlement.Structures)
@@ -94,9 +98,15 @@ public static class Simulator
                 else if (structure.Type == StructureType.Academy)
                 {
                     var def = StructureData.Get(structure.Type, structure.Level);
-                    foreach (var buffedId in settlement.AcademyBuff)
-                        if (workingBoard.TryGetValue(buffedId, out var buffed))
-                            buffed.Multiplier += def.AcademyMultiplier;
+                    var sourcePrimary = settlement.Environment & PrimaryMask;
+                    foreach (var target in workingBoard.Values)
+                    {
+                        bool isSelf      = target.Name == settlement.Name;
+                        bool sharesEnv   = sourcePrimary != EnvironmentType.None &&
+                                           (target.Environment & sourcePrimary) != EnvironmentType.None;
+                        if (isSelf || sharesEnv)
+                            target.Multiplier += def.AcademyMultiplier;
+                    }
                 }
             }
         }

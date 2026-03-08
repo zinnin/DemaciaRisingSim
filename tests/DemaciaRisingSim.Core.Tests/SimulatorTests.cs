@@ -66,7 +66,7 @@ public class SimulatorTests
     [Fact]
     public void SettlementOutput_LumberyardL1_ReturnsCorrectLumber()
     {
-        var settlement = new Settlement("X", EnvironmentType.None, [], slotCount: 3)
+        var settlement = new Settlement("X", EnvironmentType.None, slotCount: 3)
         {
             Structures = [new Structure(StructureType.Lumberyard, 1),
                           new Structure(StructureType.Lumberyard, 1),
@@ -84,7 +84,7 @@ public class SimulatorTests
     [Fact]
     public void SettlementOutput_LumberyardL4_ReturnsMaxLumber()
     {
-        var settlement = new Settlement("X", EnvironmentType.None, [], slotCount: 1)
+        var settlement = new Settlement("X", EnvironmentType.None, slotCount: 1)
         {
             Structures = [new Structure(StructureType.Lumberyard, 4)],
             Multiplier = 1.0,
@@ -95,7 +95,7 @@ public class SimulatorTests
     [Fact]
     public void SettlementOutput_Mountain_FirstQuarryDoubled()
     {
-        var settlement = new Settlement("X", EnvironmentType.Mountain, [], slotCount: 2)
+        var settlement = new Settlement("X", EnvironmentType.Mountain, slotCount: 2)
         {
             Structures = [new Structure(StructureType.Quarry, 1),
                           new Structure(StructureType.Quarry, 1)],
@@ -109,7 +109,7 @@ public class SimulatorTests
     [Fact]
     public void SettlementOutput_NonMountain_QuarryNotDoubled()
     {
-        var settlement = new Settlement("X", EnvironmentType.Heartland, [], slotCount: 1)
+        var settlement = new Settlement("X", EnvironmentType.Heartland, slotCount: 1)
         {
             Structures = [new Structure(StructureType.Quarry, 1)],
             Multiplier = 1.0,
@@ -120,7 +120,7 @@ public class SimulatorTests
     [Fact]
     public void SettlementOutput_Border_FirstForgeDoubled()
     {
-        var settlement = new Settlement("X", EnvironmentType.Border, [], slotCount: 2)
+        var settlement = new Settlement("X", EnvironmentType.Border, slotCount: 2)
         {
             Structures = [new Structure(StructureType.Forge, 1),
                           new Structure(StructureType.Forge, 1)],
@@ -134,7 +134,7 @@ public class SimulatorTests
     [Fact]
     public void SettlementOutput_Heartland_FirstFarmGrantsBonusFood()
     {
-        var settlement = new Settlement("X", EnvironmentType.Heartland, [], slotCount: 2)
+        var settlement = new Settlement("X", EnvironmentType.Heartland, slotCount: 2)
         {
             Structures = [new Structure(StructureType.Farm, 1),
                           new Structure(StructureType.Farm, 1)],
@@ -148,7 +148,7 @@ public class SimulatorTests
     [Fact]
     public void SettlementOutput_NonHeartland_NoFarmBonus()
     {
-        var settlement = new Settlement("X", EnvironmentType.Mountain, [], slotCount: 1)
+        var settlement = new Settlement("X", EnvironmentType.Mountain, slotCount: 1)
         {
             Structures = [new Structure(StructureType.Farm, 1)],
             Multiplier = 1.0,
@@ -159,7 +159,7 @@ public class SimulatorTests
     [Fact]
     public void SettlementOutput_Multiplier_ScalesProductionNotFood()
     {
-        var settlement = new Settlement("X", EnvironmentType.None, [], slotCount: 2)
+        var settlement = new Settlement("X", EnvironmentType.None, slotCount: 2)
         {
             Structures = [new Structure(StructureType.Lumberyard, 1),
                           new Structure(StructureType.Farm, 1)],
@@ -173,7 +173,7 @@ public class SimulatorTests
     [Fact]
     public void SettlementOutput_EmptySlots_ProduceNothing()
     {
-        var settlement = new Settlement("X", EnvironmentType.None, [], slotCount: 3)
+        var settlement = new Settlement("X", EnvironmentType.None, slotCount: 3)
         {
             Structures = [Structure.Empty, Structure.Empty, Structure.Empty],
             Multiplier = 1.0,
@@ -185,7 +185,7 @@ public class SimulatorTests
     [Fact]
     public void SettlementOutput_PetriciteMill_ProducesPetricite()
     {
-        var settlement = new Settlement("Capital", EnvironmentType.Petricite, [], isCapital: true, slotCount: 1)
+        var settlement = new Settlement("Capital", EnvironmentType.Petricite, isCapital: true, slotCount: 1)
         {
             Structures = [new Structure(StructureType.PetriciteMill, 3)],
             Multiplier = 1.0,
@@ -196,7 +196,7 @@ public class SimulatorTests
     [Fact]
     public void SettlementOutput_DurandsWorkshop_ProducesOnePetricite()
     {
-        var settlement = new Settlement("X", EnvironmentType.None, [], slotCount: 1)
+        var settlement = new Settlement("X", EnvironmentType.None, slotCount: 1)
         {
             Structures = [new Structure(StructureType.DurandsWorkshop, 1)],
             Multiplier = 1.0,
@@ -283,7 +283,52 @@ public class SimulatorTests
         Assert.True(academyOutput.Stone > baseOutput.Stone);
     }
 
-    // --- Score tests ---
+    [Fact]
+    public void BoardOutput_AcademyBuff_DerivedFromEnvironmentMatchesExpectedGroups()
+    {
+        // For every settlement, an Academy placed there should buff exactly the same
+        // set of settlements that the old hardcoded lists specified.
+        var expectedGroups = new Dictionary<string, string[]>
+        {
+            ["The Great City"]  = ["The Great City"],
+            ["Brookhollow"]     = ["Brookhollow", "Hayneath", "Jandelle", "Tylburne", "Vaskasia"],
+            ["Cloudfield"]      = ["Cloudfield", "Dawnhold", "Fossbarrow", "Meltridge", "Terbisia"],
+            ["Dawnhold"]        = ["Cloudfield", "Dawnhold", "Fossbarrow", "Meltridge", "Terbisia"],
+            ["Evenmoor"]        = ["Evenmoor", "Hawkstone", "High Silvermere", "Pinara", "Uwendale"],
+            ["Fossbarrow"]      = ["Cloudfield", "Dawnhold", "Fossbarrow", "Meltridge", "Terbisia"],
+            ["Hawkstone"]       = ["Evenmoor", "Hawkstone", "High Silvermere", "Pinara", "Uwendale"],
+            ["Hayneath"]        = ["Brookhollow", "Hayneath", "Jandelle", "Tylburne", "Vaskasia"],
+            ["High Silvermere"] = ["Evenmoor", "Hawkstone", "High Silvermere", "Pinara", "Uwendale"],
+            ["Jandelle"]        = ["Brookhollow", "Hayneath", "Jandelle", "Tylburne", "Vaskasia"],
+            ["Meltridge"]       = ["Cloudfield", "Dawnhold", "Fossbarrow", "Meltridge", "Terbisia"],
+            ["Pinara"]          = ["Evenmoor", "Hawkstone", "High Silvermere", "Pinara", "Uwendale"],
+            ["Terbisia"]        = ["Cloudfield", "Dawnhold", "Fossbarrow", "Meltridge", "Terbisia"],
+            ["Tylburne"]        = ["Brookhollow", "Hayneath", "Jandelle", "Tylburne", "Vaskasia"],
+            ["Uwendale"]        = ["Evenmoor", "Hawkstone", "High Silvermere", "Pinara", "Uwendale"],
+            ["Vaskasia"]        = ["Brookhollow", "Hayneath", "Jandelle", "Tylburne", "Vaskasia"],
+        };
+
+        const EnvironmentType PrimaryMask = EnvironmentType.Heartland | EnvironmentType.Mountain | EnvironmentType.Border;
+        var board = BoardData.CreateDefaultBoard();
+
+        foreach (var (sourceName, expectedTargets) in expectedGroups)
+        {
+            var source = board[sourceName];
+            var sourcePrimary = source.Environment & PrimaryMask;
+
+            var actualTargets = board.Values
+                .Where(t => t.Name == sourceName ||
+                            (sourcePrimary != EnvironmentType.None &&
+                             (t.Environment & sourcePrimary) != EnvironmentType.None))
+                .Select(t => t.Name)
+                .OrderBy(n => n)
+                .ToArray();
+
+            Assert.Equal(
+                expectedTargets.OrderBy(n => n).ToArray(),
+                actualTargets);
+        }
+    }
 
     [Fact]
     public void Score_ZeroLumber_ReturnsZero()
