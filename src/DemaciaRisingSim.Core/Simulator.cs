@@ -410,29 +410,17 @@ public static class Simulator
                     .Where(sv => sv.Name == s.Name && !usedSlotSet.Contains((sv.Name, sv.Slot)))
                     .ToList();
 
-                // Track farms already in this settlement to determine the Heartland bonus accurately.
-                int existingFarms = s.Structures.Count(st => st.Type == StructureType.Farm);
-
                 foreach (var (name, slot, _) in settlSlots)
                 {
                     if (foodNeeded <= 0) break;
 
-                    // Select the minimum farm level that meets the remaining food need in this
-                    // single placement, accounting for the Heartland +1 bonus on the first two farms.
-                    int heartlandBonus = s.Environment.HasFlag(EnvironmentType.Heartland) && existingFarms < 2 ? 1 : 0;
-
-                    int farmLevelToUse = maxFarmLevel;
-                    for (int level = 1; level <= maxFarmLevel; level++)
-                    {
-                        if (StructureData.Get(StructureType.Farm, level).FoodOutput + heartlandBonus >= foodNeeded)
-                        {
-                            farmLevelToUse = level;
-                            break;
-                        }
-                    }
-
-                    s.Structures[slot] = new Structure(StructureType.Farm, farmLevelToUse);
-                    existingFarms++;
+                    // Always use the maximum farm level so that each farm slot provides the
+                    // most food possible.  This minimises the total number of farm slots needed
+                    // to meet any food target.  In Heartland settlements the +1 bonus on the
+                    // first two farms means the target is satisfied in fewer slots than in
+                    // non-Heartland settlements — Farm L4 in a Heartland settlement gives
+                    // 5 + 1 = 6 food, covering a target of ≤6 in a single slot.
+                    s.Structures[slot] = new Structure(StructureType.Farm, maxFarmLevel);
                     fixedSlots.Add((name, slot));
                     usedSlotSet.Add((name, slot));
 

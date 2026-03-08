@@ -842,11 +842,12 @@ public class SimulatorTests
     [Fact]
     public void SmartAllocateBoard_FoodTarget_PerSettlementFoodMatchesTarget()
     {
-        // Each non-capital settlement should receive exactly FoodTargetPerSettlement food.
-        // The Heartland +1 bonus on the first two farms is accounted for in farm level
-        // selection: Heartland settlements receive Farm L1 (1 base + 1 bonus = 2 food),
-        // while non-Heartland settlements receive Farm L2 (2 base = 2 food).
-        // There is no overshoot because the minimum sufficient level is chosen.
+        // Each non-capital settlement should produce at least FoodTargetPerSettlement food.
+        // Farm slots always use the maximum level so each slot provides the most food possible.
+        // For FoodTarget=2, a single Farm L4 per settlement is placed — it overshoots the
+        // target (L4 gives 5, or 6 in Heartland) but this is intentional: the overshoot
+        // frees subsequent slots from needing any further farm coverage while maximising
+        // food output for army sustainment.
         // The capital is exempt from the food target and should have 0 food from SmartAllocate.
         var board = BoardData.CreateDefaultBoard();
         var settings = new SimulationSettings
@@ -869,21 +870,20 @@ public class SimulatorTests
             }
             else
             {
-                // Every non-capital settlement must produce exactly the food target — no more,
-                // no less.  The heartland bonus allows Farm L1 to satisfy a target of 2 in
-                // Heartland settlements; Farm L2 is used in non-Heartland settlements.
-                Assert.Equal(settings.FoodTargetPerSettlement, food);
+                // Every non-capital settlement must produce at least the food target.
+                // Max-level farms overshoot, which is acceptable and by design.
+                Assert.True(food >= settings.FoodTargetPerSettlement,
+                    $"{settlement.Name} has {food} food but target is {settings.FoodTargetPerSettlement}");
             }
         }
     }
 
     [Fact]
-    public void SmartAllocateBoard_HeartlandFarmBonus_UsesFarmL1NotFarmL2()
+    public void SmartAllocateBoard_FarmPlacement_UsesMaxLevelFarms()
     {
-        // The Heartland +1 food bonus on the first two farms means a Farm L1 (1 base + 1 bonus = 2)
-        // already satisfies a FoodTarget of 2.  A Farm L2 (2 base + 1 bonus = 3) would overshoot
-        // and waste a slot-level upgrade.  SmartAllocate must use Farm L1 in Heartland
-        // settlements and Farm L2 in non-Heartland settlements.
+        // Farm slots should always use the maximum building level so each slot provides the
+        // most food possible.  For FoodTarget=2 this means every non-capital settlement
+        // gets exactly one Farm L4 regardless of environment (Heartland or not).
         var board = BoardData.CreateDefaultBoard();
         var settings = new SimulationSettings
         {
@@ -905,8 +905,8 @@ public class SimulatorTests
 
             if (farms.Count == 1)
             {
-                int expectedLevel = settlement.Environment.HasFlag(EnvironmentType.Heartland) ? 1 : 2;
-                Assert.Equal(expectedLevel, farms[0].Level);
+                // All farms should be at the maximum building level.
+                Assert.Equal(settings.MaxBuildingLevel, farms[0].Level);
             }
         }
     }
