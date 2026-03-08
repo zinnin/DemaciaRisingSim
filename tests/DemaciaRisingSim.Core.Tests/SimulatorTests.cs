@@ -1183,4 +1183,39 @@ public class SimulatorTests
         Assert.True(millCount > 1,
             $"The Great City should have more than one PetriciteMill with default settings (got {millCount}).");
     }
+
+    [Fact]
+    public void OptimizeBoard_DefaultSettings_MaxTurnsFewerThanSixtySeven()
+    {
+        // The combination of cost-per-food-unit farm distribution (Step 7) and Phase 2
+        // buff-slot unlocking should push the optimized board below 67 max turns.
+        var board     = BoardData.CreateDefaultBoard();
+        var settings  = new SimulationSettings(); // all defaults
+        var optimized = Simulator.OptimizeBoard(board, settings);
+
+        var turns = Simulator.TurnsToComplete(Simulator.BoardOutput(optimized), settings);
+        Assert.True(turns.Max < 67,
+            $"Expected max turns < 67 after full optimization, but got {turns.Max}.");
+    }
+
+    [Fact]
+    public void OptimizeBoard_ProgressCallback_IsInvoked()
+    {
+        // OptimizeBoard accepts an optional progress callback so callers (e.g. the console
+        // app) can observe per-pass progress without coupling the core library to any I/O.
+        var board     = BoardData.CreateDefaultBoard();
+        var settings  = new SimulationSettings
+        {
+            RequireDurandsWorkshop    = false,
+            RequireShrineOfVeiledLady = false,
+            RequireQuartermaster      = false,
+            FoodTargetPerSettlement   = 0,
+        };
+
+        var messages = new System.Collections.Generic.List<string>();
+        Simulator.OptimizeBoard(board, settings, msg => messages.Add(msg));
+
+        Assert.NotEmpty(messages);
+        Assert.Contains(messages, m => m.Contains("Phase 1"));
+    }
 }
