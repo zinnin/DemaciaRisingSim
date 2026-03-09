@@ -162,7 +162,7 @@
                     <TextBlock Text="{Binding MaxTurns}" Foreground="#e2d6a0" FontWeight="Bold" FontSize="15"/>
                 </StackPanel>
                 <!-- Solver iteration counts (hidden until an optimization has been run) -->
-                <TextBlock Foreground="#aaaacc" FontSize="11" Margin="0,4,0,0">
+                <TextBlock Foreground="#aaaacc" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap">
                     <TextBlock.Style>
                         <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
                             <Style.Triggers>

@@ -149,7 +149,6 @@ public partial class MainViewModel : ObservableObject
         StatusMessage = "Optimizing board layout…";
         IterationsSummary = string.Empty;
 
-        var convergenceLines = new List<string>();
         // Capture the UI synchronization context so callbacks from the background thread
         // can update StatusMessage.  SynchronizationContext.Current is non-null for any
         // command invoked from the WPF UI thread; the null guard handles edge cases.
@@ -160,24 +159,21 @@ public partial class MainViewModel : ObservableObject
             // Send is synchronous: the background thread waits until the UI thread has
             // processed the update, so no queued callbacks can overwrite the final message.
             uiContext?.Send(_ => StatusMessage = msg, null);
-            // Collect phase-convergence messages.  The message format is defined in
-            // Simulator.OptimizeBoard and is stable within this repository.
-            if (msg.StartsWith("Phase ") && msg.Contains(" converged after "))
-                convergenceLines.Add(msg);
         };
 
         try
         {
             var settings = BuildSimulationSettings();
             var boardToOptimize = BoardData.Clone(_board);
-            var optimized = await Task.Run(() =>
+            var result = await Task.Run(() =>
                 Simulator.OptimizeBoard(boardToOptimize, settings, progressCallback));
-            _board = optimized;
+            _board = result.Board;
             LoadBoard(_board, settings);
             var turns = Simulator.TurnsToComplete(Simulator.BoardOutput(_board), settings);
             StatusMessage = $"Optimization complete. Max turns to complete: {TurnsBreakdown.Format(turns.Max)}";
-            IterationsSummary = convergenceLines.Count > 0
-                ? string.Join("  |  ", convergenceLines)
+            IterationsSummary = result.Phases.Count > 0
+                ? string.Join("  |  ", result.Phases.Select(p =>
+                    $"Phase {p.Phase} ({p.Description}): {p.Passes} pass(es)."))
                 : string.Empty;
         }
         finally

@@ -61,14 +61,14 @@ Action<string>? progress = verbose ? msg => Console.WriteLine($"  {msg}") : null
 
 var sw       = Stopwatch.StartNew();
 var board    = BoardData.CreateDefaultBoard();
-var optimized = Simulator.OptimizeBoard(board, settings, progress);
+var result   = Simulator.OptimizeBoard(board, settings, progress);
 sw.Stop();
 
 Console.WriteLine($"Done in {sw.Elapsed.TotalSeconds:F2} s.");
 Console.WriteLine();
 
 // ── Result ───────────────────────────────────────────────────────────────────
-Console.Write(Simulator.FullReport(optimized, settings));
+Console.Write(Simulator.FullReport(result.Board, settings));
 return 0;
 
 // ── Help ─────────────────────────────────────────────────────────────────────
