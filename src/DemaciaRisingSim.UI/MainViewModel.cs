@@ -87,6 +87,7 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private string _statusMessage  =
         "Ready. Click 'Load Default Board' to initialize the board, or 'Optimize' to find the best layout.";
     [ObservableProperty] private bool _isBusy;
+    [ObservableProperty] private string _iterationsSummary = string.Empty;
 
     // ── Settings (persisted) ──────────────────────────────────────────────────
     [ObservableProperty] private bool _requireDurandsWorkshop    = true;
@@ -146,15 +147,38 @@ public partial class MainViewModel : ObservableObject
     {
         IsBusy = true;
         StatusMessage = "Optimizing board layout…";
+        IterationsSummary = string.Empty;
+
+        var convergenceLines = new List<string>();
+        // Capture the UI synchronization context so callbacks from the background thread
+        // can update StatusMessage.  SynchronizationContext.Current is non-null for any
+        // command invoked from the WPF UI thread; the null guard handles edge cases.
+        var uiContext = SynchronizationContext.Current;
+
+        Action<string> progressCallback = msg =>
+        {
+            // Send is synchronous: the background thread waits until the UI thread has
+            // processed the update, so no queued callbacks can overwrite the final message.
+            uiContext?.Send(_ => StatusMessage = msg, null);
+            // Collect phase-convergence messages.  The message format is defined in
+            // Simulator.OptimizeBoard and is stable within this repository.
+            if (msg.StartsWith("Phase ") && msg.Contains(" converged after "))
+                convergenceLines.Add(msg);
+        };
+
         try
         {
             var settings = BuildSimulationSettings();
             var boardToOptimize = BoardData.Clone(_board);
-            var optimized = await Task.Run(() => Simulator.OptimizeBoard(boardToOptimize, settings));
+            var optimized = await Task.Run(() =>
+                Simulator.OptimizeBoard(boardToOptimize, settings, progressCallback));
             _board = optimized;
             LoadBoard(_board, settings);
             var turns = Simulator.TurnsToComplete(Simulator.BoardOutput(_board), settings);
             StatusMessage = $"Optimization complete. Max turns to complete: {TurnsBreakdown.Format(turns.Max)}";
+            IterationsSummary = convergenceLines.Count > 0
+                ? string.Join("  |  ", convergenceLines)
+                : string.Empty;
         }
         finally
         {
