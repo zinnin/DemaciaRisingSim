@@ -371,76 +371,118 @@ public static class Simulator
         var usedSlotSet   = new HashSet<(string, int)>(fixedSlots);
 
         // --- Step 6: Place required structures in the globally lowest-value slots ---
+        // Secondary sort key: connection count ascending, so that required (non-production)
+        // structures land in low-connection settlements first.  High-connection settlements
+        // benefit more from Marketplace amplification and should be preserved for production.
         var required = new List<Structure>();
         if (settings.RequireDurandsWorkshop)     required.Add(new Structure(StructureType.DurandsWorkshop,    1));
         if (settings.RequireShrineOfVeiledLady)  required.Add(new Structure(StructureType.ShrineOfVeiledLady, 1));
         if (settings.RequireQuartermaster)        required.Add(new Structure(StructureType.Quartermaster,       1));
 
+        var reqSortedSlots = allSlots
+            .OrderBy(x => x.Value)
+            .ThenBy(x => work.TryGetValue(x.Name, out var s) ? s.Neighbors.Count : 0)
+            .ToList();
+
         int reqIdx = 0;
         foreach (var req in required)
         {
-            while (reqIdx < sortedByValue.Count && usedSlotSet.Contains((sortedByValue[reqIdx].Name, sortedByValue[reqIdx].Slot)))
+            while (reqIdx < reqSortedSlots.Count && usedSlotSet.Contains((reqSortedSlots[reqIdx].Name, reqSortedSlots[reqIdx].Slot)))
                 reqIdx++;
-            if (reqIdx >= sortedByValue.Count) break;
+            if (reqIdx >= reqSortedSlots.Count) break;
 
-            var (name, slot, _) = sortedByValue[reqIdx++];
+            var (name, slot, _) = reqSortedSlots[reqIdx++];
             work[name].Structures[slot] = req;
             fixedSlots.Add((name, slot));
             usedSlotSet.Add((name, slot));
         }
 
         // --- Step 7: Meet the global food target using the fewest possible farm slots ---
-        // FoodTargetPerSettlement × eligible-settlement-count gives the total food goal.
-        // Farm L4 (maxLevel) is used everywhere so each slot provides the most food possible
-        // (5 food in a normal settlement, 6 in Heartland on the first two farms).
-        // Farms are placed in the globally cheapest available slots first and stop as soon
-        // as the total food across all eligible settlements reaches the target.  This ensures
-        // no more farm slots are consumed than necessary, leaving surplus slots for the
-        // production structures that actually drive the turn count.
-        // The capital is exempt: its slots are reserved for PetriciteMills.
+        // FoodTargetPerSettlement × eligible-settlement-count gives the initial food goal.
+        // This intentionally covers non-capital settlements only, because the capital's slots
+        // are reserved for PetriciteMills.  OptimizeBoard adds a Phase 3 top-up step that
+        // checks the full kingdom target (all settlements including capital) after Phase 1+2
+        // converge, placing any remaining farms in the cheapest unfixed production slots so
+        // the optimiser can absorb them from a strong 66-turn starting point.
+        // Farm L4 (maxLevel) is used everywhere so each slot provides the most food possible.
+        //
+        // At each step the algorithm picks the slot whose cost-per-food-unit is lowest:
+        //   cost-per-food = slotProductionValue / marginalFoodGain
+        // The marginal food gain is measured by temporarily placing the farm and calling
+        // SettlementOutput, so the Heartland first-farm bonus (+1 food on each of the first
+        // two farms) is captured accurately.  Re-picking after every placement means the
+        // bonus decays correctly once a settlement already has two farms, naturally spreading
+        // farms across multiple Heartland settlements rather than stacking them all in one.
+        // This reduces the total number of farm slots consumed and frees more slots for the
+        // production structures that drive the turn count.
+        // The capital is exempt from placing farms: its slots are reserved for PetriciteMills.
         if (settings.FoodTargetPerSettlement > 0)
         {
             // Farm structures go up to level 4 (unlike buff structures which cap at 3).
             int maxFarmLevel = Math.Min(4, maxLevel);
 
-            // Determine eligible settlements (non-capital, non-locked).
+            // Determine eligible settlements (non-capital, non-locked) — farms go here.
             var eligibleSettlements = work.Values
                 .Where(s => !settings.LockedSettlements.Contains(s.Name) && !s.AllowsPetriciteMill)
                 .ToList();
 
+            // Seed target: cover non-capital settlements so Phase 1+2 converge well.
+            // OptimizeBoard Phase 3 checks the full kingdom target (all settlements) afterwards.
             int totalFoodTarget = settings.FoodTargetPerSettlement * eligibleSettlements.Count;
 
             // Current food already present across all eligible settlements.
             int currentFood = eligibleSettlements.Sum(s => SettlementOutput(s).Food);
 
-            if (currentFood < totalFoodTarget)
+            while (currentFood < totalFoodTarget)
             {
-                // Cheapest slots globally across all eligible settlements.
-                var globalFarmSlots = sortedByValue
-                    .Where(sv =>
-                    {
-                        if (!work.TryGetValue(sv.Name, out var s)) return false;
-                        if (settings.LockedSettlements.Contains(s.Name)) return false;
-                        if (s.AllowsPetriciteMill) return false;
-                        return !usedSlotSet.Contains((sv.Name, sv.Slot));
-                    })
-                    .ToList();
+                // Find the available slot with the lowest production-cost per unit of food gained.
+                string? bestName     = null;
+                int     bestSlot     = -1;
+                double  bestCostPerFood = double.MaxValue;
 
-                foreach (var (name, slot, _) in globalFarmSlots)
+                // Cache the pre-placement food for the current settlement so that consecutive
+                // slots of the same settlement don't trigger a redundant SettlementOutput call.
+                string? cachedSettlementName = null;
+                int     cachedFoodBefore     = 0;
+
+                foreach (var sv in sortedByValue)
                 {
-                    if (currentFood >= totalFoodTarget) break;
+                    if (usedSlotSet.Contains((sv.Name, sv.Slot))) continue;
+                    if (!work.TryGetValue(sv.Name, out var s)) continue;
+                    if (settings.LockedSettlements.Contains(s.Name)) continue;
+                    if (s.AllowsPetriciteMill) continue;
 
-                    var s = work[name];
-                    // Capture food before placement so the Heartland bonus on subsequent
-                    // farms in the same settlement is computed correctly via SettlementOutput.
-                    int foodBefore = SettlementOutput(s).Food;
-                    s.Structures[slot] = new Structure(StructureType.Farm, maxFarmLevel);
-                    // SettlementOutput re-evaluates the settlement (6 structure slots) so the
-                    // Heartland +1 bonus on the first two farms is always counted accurately.
-                    currentFood += SettlementOutput(s).Food - foodBefore;
-                    fixedSlots.Add((name, slot));
-                    usedSlotSet.Add((name, slot));
+                    // Temporarily place the farm to measure the actual marginal food gain,
+                    // capturing the Heartland +1 bonus correctly for the current farm count.
+                    if (sv.Name != cachedSettlementName)
+                    {
+                        cachedFoodBefore     = SettlementOutput(s).Food;
+                        cachedSettlementName = sv.Name;
+                    }
+                    int foodBefore = cachedFoodBefore;
+                    s.Structures[sv.Slot] = new Structure(StructureType.Farm, maxFarmLevel);
+                    int foodGain = SettlementOutput(s).Food - foodBefore;
+                    s.Structures[sv.Slot] = Structure.Empty; // restore
+
+                    if (foodGain <= 0) continue;
+
+                    double costPerFood = sv.Value / foodGain;
+                    if (costPerFood < bestCostPerFood)
+                    {
+                        bestCostPerFood = costPerFood;
+                        bestName = sv.Name;
+                        bestSlot = sv.Slot;
+                    }
                 }
+
+                if (bestName is null) break; // no more eligible slots
+
+                var settlement = work[bestName];
+                int fb = SettlementOutput(settlement).Food;
+                settlement.Structures[bestSlot] = new Structure(StructureType.Farm, maxFarmLevel);
+                currentFood += SettlementOutput(settlement).Food - fb;
+                fixedSlots.Add((bestName, bestSlot));
+                usedSlotSet.Add((bestName, bestSlot));
             }
         }
 
@@ -457,23 +499,198 @@ public static class Simulator
 
     /// <summary>
     /// Uses <see cref="SmartAllocateBoard"/> to create an informed starting layout, then
-    /// iteratively calls <see cref="Permutate"/> until no further improvement is found, up to a
-    /// maximum of <see cref="GameConstants.MaxOptimizationIterations"/> iterations.
+    /// iteratively calls <see cref="Permutate"/> until no further improvement is found.
+    /// Optimization runs in three phases:
+    /// <list type="number">
+    ///   <item><b>Phase 1</b> — all slots fixed by <see cref="SmartAllocateBoard"/> (buff
+    ///     structures, required structures, food farms) are locked.  <see cref="Permutate"/>
+    ///     fills the remaining empty slots and repeats until convergence.</item>
+    ///   <item><b>Phase 2</b> — Marketplace and Academy slots are unlocked so
+    ///     <see cref="Permutate"/> can reconsider buff-structure placement.  Required
+    ///     structures and food farms remain fixed.  This lets the optimizer escape the
+    ///     local optimum imposed by the initial heuristic buff placement.</item>
+    ///   <item><b>Phase 3</b> — Kingdom-wide food top-up.
+    ///     <see cref="SmartAllocateBoard"/> seeds food only for non-capital settlements
+    ///     (the capital's slots are too valuable to use for farms).  After Phase 1+2 converge
+    ///     to the best production layout, Phase 3 checks whether total food meets the
+    ///     full kingdom target (<c>FoodTargetPerSettlement × totalSettlements</c>).  If not,
+    ///     it greedily places the minimum number of extra farms in the cheapest available
+    ///     slots and runs <see cref="Permutate"/> to convergence so the rest of the board
+    ///     can adapt.  Starting from the already-optimised board means the extra farm is
+    ///     absorbed from a strong baseline with ample slack in non-bottleneck resources.</item>
+    /// </list>
     /// </summary>
+    /// <param name="board">Source board (not mutated).</param>
+    /// <param name="settings">Optimizer settings.</param>
+    /// <param name="progressCallback">
+    /// Optional callback invoked after each Permutate pass with a human-readable progress
+    /// message (e.g. "Phase 1, pass 2: max turns = 65").  Useful for console / diagnostic
+    /// output without coupling the core library to any I/O mechanism.
+    /// </param>
     public static Dictionary<string, Settlement> OptimizeBoard(
         Dictionary<string, Settlement> board,
-        SimulationSettings? settings = null)
+        SimulationSettings? settings = null,
+        Action<string>? progressCallback = null)
     {
         settings ??= new SimulationSettings();
 
         var prepared   = SmartAllocateBoard(board, settings, out var fixedSlots);
         var solution   = Permutate(prepared, settings, fixedSlots);
         int iterations = GameConstants.MaxOptimizationIterations;
+        int pass       = 1;
 
+        progressCallback?.Invoke($"Phase 1, pass {pass}: max turns = {TurnsToComplete(BoardOutput(solution), settings).Max}");
+
+        // Phase 1: converge with all SmartAllocateBoard-fixed slots locked.
         while (iterations-- > 0 && !BoardsEqual(solution, prepared))
         {
             prepared = BoardData.Clone(solution);
             solution = Permutate(solution, settings, fixedSlots);
+            pass++;
+            progressCallback?.Invoke($"Phase 1, pass {pass}: max turns = {TurnsToComplete(BoardOutput(solution), settings).Max}");
+        }
+
+        progressCallback?.Invoke($"Phase 1 converged after {pass} pass(es).");
+
+        // Phase 2: unlock Marketplace/Academy slots so Permutate can reconsider buff
+        // placement.  Required structures and food farms stay fixed.
+        var nonBuffFixed = new HashSet<(string, int)>(
+            fixedSlots.Where(fs =>
+            {
+                var type = solution[fs.Item1].Structures[fs.Item2].Type;
+                return type != StructureType.Marketplace && type != StructureType.Academy;
+            }));
+
+        if (nonBuffFixed.Count < fixedSlots.Count)
+        {
+            progressCallback?.Invoke("Phase 2: re-optimizing with buff slots unlocked.");
+
+            prepared   = BoardData.Clone(solution);
+            solution   = Permutate(solution, settings, nonBuffFixed);
+            iterations = GameConstants.MaxOptimizationIterations;
+            pass       = 1;
+
+            progressCallback?.Invoke($"Phase 2, pass {pass}: max turns = {TurnsToComplete(BoardOutput(solution), settings).Max}");
+
+            while (iterations-- > 0 && !BoardsEqual(solution, prepared))
+            {
+                prepared = BoardData.Clone(solution);
+                solution = Permutate(solution, settings, nonBuffFixed);
+                pass++;
+                progressCallback?.Invoke($"Phase 2, pass {pass}: max turns = {TurnsToComplete(BoardOutput(solution), settings).Max}");
+            }
+
+            progressCallback?.Invoke($"Phase 2 converged after {pass} pass(es).");
+        }
+
+        // Phase 3: Kingdom-wide food top-up.
+        // SmartAllocateBoard's Step 7 seeds food only for non-capital settlements
+        // (FoodTargetPerSettlement × eligibleCount).  The true kingdom food requirement
+        // covers every settlement, including the capital, which cannot build farms but still
+        // needs food (FoodTargetPerSettlement × totalSettlements).
+        // By doing this top-up AFTER Phase 1+2 converge we start from the strongest possible
+        // production layout, so the extra farm slot is absorbed with minimal impact on turns.
+        if (settings.FoodTargetPerSettlement > 0)
+        {
+            int kingdomFoodTarget = settings.FoodTargetPerSettlement * solution.Count;
+            ApplyMultipliers(solution);
+            int currentFood = solution.Values.Sum(s => SettlementOutput(s).Food);
+
+            if (currentFood < kingdomFoodTarget)
+            {
+                progressCallback?.Invoke(
+                    $"Phase 3: food top-up needed ({currentFood} < {kingdomFoodTarget}).");
+
+                int maxFarmLevel = Math.Min(4, settings.MaxBuildingLevel);
+
+                // Start from nonBuffFixed (required structures + food farms already fixed;
+                // Marketplace/Academy are free for Permutate to reconsider).
+                var phase3Fixed = new HashSet<(string, int)>(nonBuffFixed);
+
+                // Build a slot-value list from the converged board so the greedy picker can
+                // find the cheapest non-fixed production slot to replace with a farm.
+                ApplyMultipliers(solution);
+                var topupSlots = new List<(string Name, int Slot, double Value)>();
+                foreach (var kv in solution)
+                {
+                    if (settings.LockedSettlements.Contains(kv.Key)) continue;
+                    if (kv.Value.AllowsPetriciteMill) continue;
+                    for (int i = 0; i < kv.Value.Structures.Length; i++)
+                    {
+                        if (!phase3Fixed.Contains((kv.Key, i)))
+                            topupSlots.Add((kv.Key, i,
+                                ComputeSlotValue(kv.Value, i, settings.MaxBuildingLevel, settings)));
+                    }
+                }
+                topupSlots.Sort((a, b) => a.Value.CompareTo(b.Value));
+
+                // Greedy cost-per-food-unit placement (same algorithm as Step 7).
+                while (currentFood < kingdomFoodTarget)
+                {
+                    string? bestName       = null;
+                    int     bestSlot       = -1;
+                    double  bestCostPerFood = double.MaxValue;
+                    string? cachedName     = null;
+                    int     cachedFood     = 0;
+
+                    foreach (var sv in topupSlots)
+                    {
+                        if (phase3Fixed.Contains((sv.Name, sv.Slot))) continue;
+                        if (!solution.TryGetValue(sv.Name, out var s)) continue;
+                        if (s.AllowsPetriciteMill) continue;
+
+                        if (sv.Name != cachedName)
+                        {
+                            cachedFood = SettlementOutput(s).Food;
+                            cachedName = sv.Name;
+                        }
+
+                        var orig = s.Structures[sv.Slot];
+                        s.Structures[sv.Slot] = new Structure(StructureType.Farm, maxFarmLevel);
+                        int gain = SettlementOutput(s).Food - cachedFood;
+                        s.Structures[sv.Slot] = orig; // restore
+
+                        if (gain <= 0) continue;
+
+                        double cpf = sv.Value / gain;
+                        if (cpf < bestCostPerFood)
+                        {
+                            bestCostPerFood = cpf;
+                            bestName        = sv.Name;
+                            bestSlot        = sv.Slot;
+                        }
+                    }
+
+                    if (bestName is null) break;
+
+                    var sett = solution[bestName];
+                    int fb   = SettlementOutput(sett).Food;
+                    sett.Structures[bestSlot] = new Structure(StructureType.Farm, maxFarmLevel);
+                    currentFood += SettlementOutput(sett).Food - fb;
+                    phase3Fixed.Add((bestName, bestSlot));
+                }
+
+                // Converge Permutate from the adjusted board so production slots can
+                // compensate for the extra farm.
+                prepared   = BoardData.Clone(solution);
+                solution   = Permutate(solution, settings, phase3Fixed);
+                iterations = GameConstants.MaxOptimizationIterations;
+                pass       = 1;
+
+                progressCallback?.Invoke(
+                    $"Phase 3, pass {pass}: max turns = {TurnsToComplete(BoardOutput(solution), settings).Max}");
+
+                while (iterations-- > 0 && !BoardsEqual(solution, prepared))
+                {
+                    prepared = BoardData.Clone(solution);
+                    solution = Permutate(solution, settings, phase3Fixed);
+                    pass++;
+                    progressCallback?.Invoke(
+                        $"Phase 3, pass {pass}: max turns = {TurnsToComplete(BoardOutput(solution), settings).Max}");
+                }
+
+                progressCallback?.Invoke($"Phase 3 converged after {pass} pass(es).");
+            }
         }
 
         return solution;

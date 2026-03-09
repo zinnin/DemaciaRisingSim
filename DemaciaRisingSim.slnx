@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/DemaciaRisingSim.Core/DemaciaRisingSim.Core.csproj" />
+    <Project Path="src/DemaciaRisingSim.Console/DemaciaRisingSim.Console.csproj" />
     <Project Path="src/DemaciaRisingSim.UI/DemaciaRisingSim.UI.csproj" />
   </Folder>
   <Folder Name="/tests/">

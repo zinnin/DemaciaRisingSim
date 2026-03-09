@@ -750,6 +750,41 @@ public class SimulatorTests
     }
 
     [Fact]
+    public void SmartAllocateBoard_RequiredStructures_PreferLowConnectionSettlements()
+    {
+        // Brookhollow (4 connections) and Vaskasia (3 connections) are both Heartland settlements
+        // with identical per-slot production values.  The tie-breaking on connection count must
+        // ensure the three required structures land in Vaskasia (fewer connections) rather than
+        // Brookhollow, preserving Brookhollow's slots for production structures that benefit more
+        // from Marketplace amplification.
+        var board = BoardData.CreateDefaultBoard();
+        var settings = new SimulationSettings
+        {
+            MaxBuildingLevel          = 1,
+            RequireDurandsWorkshop    = true,
+            RequireShrineOfVeiledLady = true,
+            RequireQuartermaster      = true,
+            FoodTargetPerSettlement   = 0,
+        };
+        var allocated = Simulator.SmartAllocateBoard(board, settings);
+
+        // Brookhollow has 4 connections; Vaskasia has 3 and equal slot values.
+        // Required structures must NOT end up in Brookhollow.
+        var brookhollow = allocated["Brookhollow"];
+        var requiredTypes = new HashSet<StructureType>
+        {
+            StructureType.DurandsWorkshop,
+            StructureType.ShrineOfVeiledLady,
+            StructureType.Quartermaster,
+        };
+        Assert.False(
+            brookhollow.Structures.Any(s => requiredTypes.Contains(s.Type)),
+            "Brookhollow (4 connections) should not receive required structures when " +
+            "lower-connection settlements with equally-valued slots (e.g. Vaskasia, 3 connections) " +
+            "are available.");
+    }
+
+    [Fact]
     public void SmartAllocateBoard_FoodTarget_MetPerSettlement()
     {
         var board = BoardData.CreateDefaultBoard();
@@ -1147,5 +1182,56 @@ public class SimulatorTests
         int millCount = capital.Structures.Count(s => s.Type == StructureType.PetriciteMill);
         Assert.True(millCount > 1,
             $"The Great City should have more than one PetriciteMill with default settings (got {millCount}).");
+    }
+
+    [Fact]
+    public void OptimizeBoard_DefaultSettings_MaxTurnsFewerThanSixtySeven()
+    {
+        // Cost-per-food-unit farm distribution (Step 7), Phase 2 buff-slot unlocking, and
+        // Phase 3 food top-up together should push the optimized board below 67 max turns.
+        var board     = BoardData.CreateDefaultBoard();
+        var settings  = new SimulationSettings(); // all defaults
+        var optimized = Simulator.OptimizeBoard(board, settings);
+
+        var turns = Simulator.TurnsToComplete(Simulator.BoardOutput(optimized), settings);
+        Assert.True(turns.Max < 67,
+            $"Expected max turns < 67 after full optimization, but got {turns.Max}.");
+    }
+
+    [Fact]
+    public void OptimizeBoard_DefaultSettings_FoodHitsKingdomTarget()
+    {
+        // Phase 3 ensures total food reaches FoodTargetPerSettlement × totalSettlements
+        // (including the capital, which needs food but cannot build farms).
+        // With 16 settlements and FoodTargetPerSettlement = 2, the kingdom food target is 32.
+        var board     = BoardData.CreateDefaultBoard();
+        var settings  = new SimulationSettings(); // all defaults
+        var optimized = Simulator.OptimizeBoard(board, settings);
+
+        int kingdomFoodTarget = settings.FoodTargetPerSettlement * optimized.Count;
+        int actualFood        = Simulator.BoardOutput(optimized).Food;
+        Assert.True(actualFood >= kingdomFoodTarget,
+            $"Expected food ≥ {kingdomFoodTarget} (Phase 3 kingdom-wide target) but got {actualFood}.");
+    }
+
+    [Fact]
+    public void OptimizeBoard_ProgressCallback_IsInvoked()
+    {
+        // OptimizeBoard accepts an optional progress callback so callers (e.g. the console
+        // app) can observe per-pass progress without coupling the core library to any I/O.
+        var board     = BoardData.CreateDefaultBoard();
+        var settings  = new SimulationSettings
+        {
+            RequireDurandsWorkshop    = false,
+            RequireShrineOfVeiledLady = false,
+            RequireQuartermaster      = false,
+            FoodTargetPerSettlement   = 0,
+        };
+
+        var messages = new System.Collections.Generic.List<string>();
+        Simulator.OptimizeBoard(board, settings, msg => messages.Add(msg));
+
+        Assert.NotEmpty(messages);
+        Assert.Contains(messages, m => m.Contains("Phase 1"));
     }
 }

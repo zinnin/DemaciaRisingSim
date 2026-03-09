@@ -36,9 +36,21 @@ public class SimulationSettings
     public int MaxBuildingLevel { get; set; } = 4;
 
     /// <summary>
-    /// Minimum food units each settlement should produce. Farms are placed in the
-    /// lowest-value slots of each settlement to satisfy this target before the remaining
-    /// slots are filled with production structures. Default: 2.
+    /// Minimum food units the kingdom should produce per settlement per turn.
+    /// <para>
+    /// The optimizer uses this value at two levels:
+    /// <list type="bullet">
+    ///   <item><b>SmartAllocateBoard seed</b> — farms are placed in non-capital settlements
+    ///     to reach <c>FoodTargetPerSettlement × nonCapitalSettlements</c>, giving Phase 1+2
+    ///     a clean starting point without tying up the capital's PetriciteMill slots.</item>
+    ///   <item><b>OptimizeBoard Phase 3 top-up</b> — after Phase 1+2 converge, the optimizer
+    ///     checks the full kingdom target <c>FoodTargetPerSettlement × totalSettlements</c>
+    ///     (including the capital, which needs food but cannot build farms) and greedily adds
+    ///     any remaining farms in the cheapest available slots before a final Permutate pass.
+    ///     </item>
+    /// </list>
+    /// </para>
+    /// Default: 2.
     /// </summary>
     public int FoodTargetPerSettlement { get; set; } = 2;
 

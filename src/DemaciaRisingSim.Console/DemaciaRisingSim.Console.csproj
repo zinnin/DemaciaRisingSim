@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>DemaciaRisingSim.Console</AssemblyName>
+    <RootNamespace>DemaciaRisingSim.Console</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DemaciaRisingSim.Core\DemaciaRisingSim.Core.csproj" />
+  </ItemGroup>
+
+</Project>
