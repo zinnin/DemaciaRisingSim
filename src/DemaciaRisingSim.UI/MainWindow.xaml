@@ -162,19 +162,25 @@
                     <TextBlock Text="{Binding MaxTurns}" Foreground="#e2d6a0" FontWeight="Bold" FontSize="15"/>
                 </StackPanel>
                 <!-- Solver iteration counts (hidden until an optimization has been run) -->
-                <TextBlock Foreground="#aaaacc" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap">
-                    <TextBlock.Style>
-                        <Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+                <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
                             <Style.Triggers>
                                 <DataTrigger Binding="{Binding IterationsSummary}" Value="">
                                     <Setter Property="Visibility" Value="Collapsed"/>
                                 </DataTrigger>
                             </Style.Triggers>
                         </Style>
-                    </TextBlock.Style>
-                    <Run Text="Solver iterations — " FontWeight="SemiBold" Foreground="#e2d6a0"/>
-                    <Run Text="{Binding IterationsSummary}"/>
-                </TextBlock>
+                    </StackPanel.Style>
+                    <TextBlock Foreground="#aaaacc" FontSize="11" TextWrapping="Wrap" VerticalAlignment="Center">
+                        <Run Text="Solver iterations — " FontWeight="SemiBold" Foreground="#e2d6a0"/>
+                        <Run Text="{Binding IterationsSummary}"/>
+                    </TextBlock>
+                    <Button Content="Copy" Margin="8,0,0,0" Padding="6,2"
+                            FontSize="11" VerticalAlignment="Center"
+                            Command="{Binding CopyIterationsSummaryCommand}"
+                            ToolTip="Copy solver iterations to clipboard"/>
+                </StackPanel>
             </StackPanel>
         </Border>
 
