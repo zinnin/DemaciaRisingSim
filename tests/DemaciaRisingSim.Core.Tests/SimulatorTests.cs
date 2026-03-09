@@ -555,7 +555,7 @@ public class SimulatorTests
         };
         double initialScore = Simulator.Score(board);
         var optimized = Simulator.OptimizeBoard(board, settings);
-        Assert.True(Simulator.Score(optimized) >= initialScore);
+        Assert.True(Simulator.Score(optimized.Board) >= initialScore);
     }
 
     [Fact]
@@ -572,7 +572,7 @@ public class SimulatorTests
 
         // The smart allocation places required structures in globally lowest-value slots,
         // so we verify they are present somewhere on the board (not hardcoded to specific slots).
-        var allStructureTypes = optimized.Values
+        var allStructureTypes = optimized.Board.Values
             .SelectMany(s => s.Structures)
             .Select(s => s.Type)
             .ToList();
@@ -598,7 +598,7 @@ public class SimulatorTests
         var optimized = Simulator.OptimizeBoard(board, settings);
 
         // The locked settlement's structures should be unchanged
-        Assert.Equal(StructureType.Watchtower, optimized["Fossbarrow"].Structures[0].Type);
+        Assert.Equal(StructureType.Watchtower, optimized.Board["Fossbarrow"].Structures[0].Type);
     }
 
     [Fact]
@@ -614,7 +614,7 @@ public class SimulatorTests
         };
         var optimized = Simulator.OptimizeBoard(board, settings);
 
-        foreach (var settlement in optimized.Values)
+        foreach (var settlement in optimized.Board.Values)
             foreach (var structure in settlement.Structures)
                 if (structure.Type != StructureType.Empty)
                     Assert.True(structure.Level <= 1, $"Found level {structure.Level} in {settlement.Name}");
@@ -864,7 +864,7 @@ public class SimulatorTests
         // but even the raw smart allocation (which leaves many slots empty) might score lower;
         // the full OptimizeBoard must score at least as well.
         var optimized = Simulator.OptimizeBoard(board, settings);
-        Assert.True(Simulator.Score(optimized) >= baseScore);
+        Assert.True(Simulator.Score(optimized.Board) >= baseScore);
     }
 
     [Fact]
@@ -953,7 +953,7 @@ public class SimulatorTests
         };
         var optimized = Simulator.OptimizeBoard(board, settings);
 
-        var allStructures = optimized.Values.SelectMany(s => s.Structures).ToList();
+        var allStructures = optimized.Board.Values.SelectMany(s => s.Structures).ToList();
 
         Assert.Equal(1, allStructures.Count(s => s.Type == StructureType.DurandsWorkshop));
         Assert.Equal(1, allStructures.Count(s => s.Type == StructureType.ShrineOfVeiledLady));
@@ -1108,7 +1108,7 @@ public class SimulatorTests
         };
         var optimized = Simulator.OptimizeBoard(board, settings);
 
-        foreach (var settlement in optimized.Values)
+        foreach (var settlement in optimized.Board.Values)
         {
             int emptyCount = settlement.Structures.Count(s => s.Type == StructureType.Empty);
             Assert.True(emptyCount == 0,
@@ -1133,7 +1133,7 @@ public class SimulatorTests
         };
         var optimized = Simulator.OptimizeBoard(board, settings);
 
-        var capital = optimized["The Great City"];
+        var capital = optimized.Board["The Great City"];
         int millCount = capital.Structures.Count(s => s.Type == StructureType.PetriciteMill);
         Assert.True(millCount > 1,
             $"The Great City should have more than one PetriciteMill after optimization (got {millCount}).");
@@ -1178,7 +1178,7 @@ public class SimulatorTests
         var settings  = new SimulationSettings(); // all defaults
         var optimized = Simulator.OptimizeBoard(board, settings);
 
-        var capital   = optimized["The Great City"];
+        var capital   = optimized.Board["The Great City"];
         int millCount = capital.Structures.Count(s => s.Type == StructureType.PetriciteMill);
         Assert.True(millCount > 1,
             $"The Great City should have more than one PetriciteMill with default settings (got {millCount}).");
@@ -1193,7 +1193,7 @@ public class SimulatorTests
         var settings  = new SimulationSettings(); // all defaults
         var optimized = Simulator.OptimizeBoard(board, settings);
 
-        var turns = Simulator.TurnsToComplete(Simulator.BoardOutput(optimized), settings);
+        var turns = Simulator.TurnsToComplete(Simulator.BoardOutput(optimized.Board), settings);
         Assert.True(turns.Max < 67,
             $"Expected max turns < 67 after full optimization, but got {turns.Max}.");
     }
@@ -1208,8 +1208,8 @@ public class SimulatorTests
         var settings  = new SimulationSettings(); // all defaults
         var optimized = Simulator.OptimizeBoard(board, settings);
 
-        int kingdomFoodTarget = settings.FoodTargetPerSettlement * optimized.Count;
-        int actualFood        = Simulator.BoardOutput(optimized).Food;
+        int kingdomFoodTarget = settings.FoodTargetPerSettlement * optimized.Board.Count;
+        int actualFood        = Simulator.BoardOutput(optimized.Board).Food;
         Assert.True(actualFood >= kingdomFoodTarget,
             $"Expected food ≥ {kingdomFoodTarget} (Phase 3 kingdom-wide target) but got {actualFood}.");
     }
@@ -1233,5 +1233,47 @@ public class SimulatorTests
 
         Assert.NotEmpty(messages);
         Assert.Contains(messages, m => m.Contains("Phase 1"));
+    }
+
+    [Fact]
+    public void OptimizeBoard_Result_ContainsPhaseDescriptionsAndPassCounts()
+    {
+        // OptimizationResult.Phases must carry at least Phase 1.  Each phase result must
+        // have a non-empty description (defined in Simulator next to the phase code) and a
+        // positive pass count.  This ensures the phase descriptions are kept in sync with
+        // the implementation.
+        var board    = BoardData.CreateDefaultBoard();
+        var settings = new SimulationSettings
+        {
+            RequireDurandsWorkshop    = false,
+            RequireShrineOfVeiledLady = false,
+            RequireQuartermaster      = false,
+            FoodTargetPerSettlement   = 0,
+        };
+
+        var result = Simulator.OptimizeBoard(board, settings);
+
+        Assert.NotEmpty(result.Phases);
+        Assert.Contains(result.Phases, p => p.Phase == 1);
+        foreach (var phase in result.Phases)
+        {
+            Assert.True(phase.Passes >= 1, $"Phase {phase.Phase} reported {phase.Passes} pass(es), expected ≥ 1.");
+            Assert.False(string.IsNullOrWhiteSpace(phase.Description),
+                $"Phase {phase.Phase} has no description.");
+        }
+    }
+
+    [Fact]
+    public void OptimizeBoard_Result_PhaseNumbersAreOrdered()
+    {
+        // Phases must be reported in ascending order (1, then optionally 2, then optionally 3).
+        var board    = BoardData.CreateDefaultBoard();
+        var settings = new SimulationSettings(); // all defaults (triggers all three phases)
+
+        var result = Simulator.OptimizeBoard(board, settings);
+
+        for (int i = 1; i < result.Phases.Count; i++)
+            Assert.True(result.Phases[i].Phase > result.Phases[i - 1].Phase,
+                $"Phases are not in ascending order: {result.Phases[i - 1].Phase} followed by {result.Phases[i].Phase}.");
     }
 }

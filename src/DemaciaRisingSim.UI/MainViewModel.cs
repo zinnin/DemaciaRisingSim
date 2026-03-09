@@ -87,6 +87,7 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty] private string _statusMessage  =
         "Ready. Click 'Load Default Board' to initialize the board, or 'Optimize' to find the best layout.";
     [ObservableProperty] private bool _isBusy;
+    [ObservableProperty] private string _iterationsSummary = string.Empty;
 
     // ── Settings (persisted) ──────────────────────────────────────────────────
     [ObservableProperty] private bool _requireDurandsWorkshop    = true;
@@ -146,15 +147,34 @@ public partial class MainViewModel : ObservableObject
     {
         IsBusy = true;
         StatusMessage = "Optimizing board layout…";
+        IterationsSummary = string.Empty;
+
+        // Capture the UI synchronization context so callbacks from the background thread
+        // can update StatusMessage.  SynchronizationContext.Current is non-null for any
+        // command invoked from the WPF UI thread; the null guard handles edge cases.
+        var uiContext = SynchronizationContext.Current;
+
+        Action<string> progressCallback = msg =>
+        {
+            // Send is synchronous: the background thread waits until the UI thread has
+            // processed the update, so no queued callbacks can overwrite the final message.
+            uiContext?.Send(_ => StatusMessage = msg, null);
+        };
+
         try
         {
             var settings = BuildSimulationSettings();
             var boardToOptimize = BoardData.Clone(_board);
-            var optimized = await Task.Run(() => Simulator.OptimizeBoard(boardToOptimize, settings));
-            _board = optimized;
+            var result = await Task.Run(() =>
+                Simulator.OptimizeBoard(boardToOptimize, settings, progressCallback));
+            _board = result.Board;
             LoadBoard(_board, settings);
             var turns = Simulator.TurnsToComplete(Simulator.BoardOutput(_board), settings);
             StatusMessage = $"Optimization complete. Max turns to complete: {TurnsBreakdown.Format(turns.Max)}";
+            IterationsSummary = result.Phases.Count > 0
+                ? string.Join("  |  ", result.Phases.Select(p =>
+                    $"Phase {p.Phase} ({p.Description}): {p.Passes} pass(es)."))
+                : string.Empty;
         }
         finally
         {

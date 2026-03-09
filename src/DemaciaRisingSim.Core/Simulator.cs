@@ -527,21 +527,34 @@ public static class Simulator
     /// message (e.g. "Phase 1, pass 2: max turns = 65").  Useful for console / diagnostic
     /// output without coupling the core library to any I/O mechanism.
     /// </param>
-    public static Dictionary<string, Settlement> OptimizeBoard(
+    /// <returns>
+    /// An <see cref="OptimizationResult"/> containing the optimized board and a list of
+    /// <see cref="OptimizationPhaseResult"/> entries (one per phase that ran) with each
+    /// phase's description and pass count.
+    /// </returns>
+    public static OptimizationResult OptimizeBoard(
         Dictionary<string, Settlement> board,
         SimulationSettings? settings = null,
         Action<string>? progressCallback = null)
     {
         settings ??= new SimulationSettings();
 
+        var phases     = new List<OptimizationPhaseResult>();
         var prepared   = SmartAllocateBoard(board, settings, out var fixedSlots);
         var solution   = Permutate(prepared, settings, fixedSlots);
         int iterations = GameConstants.MaxOptimizationIterations;
         int pass       = 1;
 
+        // Phase 1: Lock all slots placed by SmartAllocateBoard and iteratively re-run
+        // Permutate until the board converges on the best overall production layout.
+        // This anchors required structures, food farms, and influence buffs, then lets
+        // Permutate fine-tune every remaining production slot.
+        const string Phase1Description =
+            "Lock all SmartAllocate slots (required structures, food farms, influence buffs) " +
+            "and converge Permutate on the best overall production layout.";
+
         progressCallback?.Invoke($"Phase 1, pass {pass}: max turns = {TurnsToComplete(BoardOutput(solution), settings).Max}");
 
-        // Phase 1: converge with all SmartAllocateBoard-fixed slots locked.
         while (iterations-- > 0 && !BoardsEqual(solution, prepared))
         {
             prepared = BoardData.Clone(solution);
@@ -551,9 +564,15 @@ public static class Simulator
         }
 
         progressCallback?.Invoke($"Phase 1 converged after {pass} pass(es).");
+        phases.Add(new OptimizationPhaseResult(1, Phase1Description, pass));
 
-        // Phase 2: unlock Marketplace/Academy slots so Permutate can reconsider buff
-        // placement.  Required structures and food farms stay fixed.
+        // Phase 2: Unlock Marketplace/Academy buff slots so Permutate can reconsider
+        // influence-buff placement relative to the converged production layout from Phase 1.
+        // Required structures and food farms stay fixed; only buff slots are freed.
+        const string Phase2Description =
+            "Unlock Marketplace/Academy buff slots and re-optimize their placement " +
+            "against the converged Phase 1 layout.";
+
         var nonBuffFixed = new HashSet<(string, int)>(
             fixedSlots.Where(fs =>
             {
@@ -581,6 +600,7 @@ public static class Simulator
             }
 
             progressCallback?.Invoke($"Phase 2 converged after {pass} pass(es).");
+            phases.Add(new OptimizationPhaseResult(2, Phase2Description, pass));
         }
 
         // Phase 3: Kingdom-wide food top-up.
@@ -590,6 +610,10 @@ public static class Simulator
         // needs food (FoodTargetPerSettlement × totalSettlements).
         // By doing this top-up AFTER Phase 1+2 converge we start from the strongest possible
         // production layout, so the extra farm slot is absorbed with minimal impact on turns.
+        const string Phase3Description =
+            "Kingdom-wide food top-up: greedily place extra farms until total food meets " +
+            "FoodTargetPerSettlement × all settlements, then reconverge Permutate.";
+
         if (settings.FoodTargetPerSettlement > 0)
         {
             int kingdomFoodTarget = settings.FoodTargetPerSettlement * solution.Count;
@@ -690,10 +714,11 @@ public static class Simulator
                 }
 
                 progressCallback?.Invoke($"Phase 3 converged after {pass} pass(es).");
+                phases.Add(new OptimizationPhaseResult(3, Phase3Description, pass));
             }
         }
 
-        return solution;
+        return new OptimizationResult(solution, phases.AsReadOnly());
     }
 
     /// <summary>
